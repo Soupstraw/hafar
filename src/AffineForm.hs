@@ -11,11 +11,12 @@ module AffineForm (newEps,
                    tan
                   ) where
 
-import Control.Monad.State
+import Control.Monad.State hiding (fix)
+import Control.Exception as Exception
 
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
-import Data.Maybe
+import Data.Fixed (mod')
 
 import System.Random
 import Test.QuickCheck.Arbitrary
@@ -24,29 +25,23 @@ import Test.QuickCheck.Property
 
 data AF a
   = AF a [a] a
-  | Reals
   deriving (Show)
+
+data AFException
+  = DivisionByZero
+
+instance Show AFException where
+  show DivisionByZero = "division by zero"
+
+instance Exception AFException
 
 instance (Num a, Arbitrary a) => Arbitrary (AF a) where
   arbitrary = do
-    oneof [ do
-              x <- arbitrary
-              xs <- arbitrary
-              return $ AF x xs 0
-          , return Reals
-          ]
-  shrink Reals = []
+                x <- arbitrary
+                xs <- arbitrary
+                return $ AF x xs 0
   shrink (AF x xs xe) =
-    [Reals] ++
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
-
-instance Bounded Float where
-  minBound = -(1/0)
-  maxBound = 1/0
-
-instance Bounded Double where
-  minBound = -(1/0)
-  maxBound = 1/0
 
 type AFIndex = Int
 type AFM = State AFIndex
@@ -63,23 +58,19 @@ newFromInterval i = do
   let mult = ((IA.width i) / 2) `multiplyScalar` eps
   return $ (IA.midpoint i) `addScalar` mult
 
-range :: (Num a, Bounded a) => AF a -> a
+range :: (Num a) => AF a -> a
 range (AF _ xs xe) = xe + (sum $ abs <$> xs)
-range Reals = maxBound
 
-midpoint :: (Num a) => AF a -> Maybe a
-midpoint (AF x _ _) = return x
-midpoint Reals = Nothing
+midpoint :: (Num a) => AF a -> a
+midpoint (AF x _ _) = x
 
-lo :: (Num a, Bounded a) => AF a -> a
-lo Reals = minBound
-lo af = (fromMaybe 0 $ midpoint af) - (range af)
+lo :: (Num a) => AF a -> a
+lo af = (midpoint af) + (range af)
 
-hi :: (Num a, Bounded a) => AF a -> a
-hi Reals = maxBound
-hi af = (fromMaybe 0 $ midpoint af) + (range af)
+hi :: (Num a) => AF a -> a
+hi af = (midpoint af) + (range af)
 
-interval :: (Num a, Ord a, Bounded a) => AF a -> IA.Interval a
+interval :: (Num a, Ord a) => AF a -> IA.Interval a
 interval af = (lo af)...(hi af)
 
 -- Affine arithmetic operations
@@ -93,45 +84,37 @@ addError (AF x xs xe) e = AF x xs (xe + e)
 -- Add scalar
 addScalar :: (Num a) => a -> AF a -> AF a
 a `addScalar` (AF x xs xe) = AF (x+a) xs xe
-_ `addScalar` Reals = Reals
 
 add :: (Num a) => AF a -> AF a -> AF a
 (AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe+ye)
-  where zs = (\(l,r) -> l+r) <$> zipWithZeros xs ys
-Reals `add` _ = Reals
-_ `add` Reals = Reals
+  where zs = (\(l,r) -> l+r) <$> embed xs ys
 
 negateAF :: (Num a) => AF a -> AF a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
-negateAF Reals = Reals
 
 subtract :: (Num a) => AF a -> AF a -> AF a
 x `subtract` y = x `add` (negateAF y)
 
 multiply :: (Num a) => AF a -> AF a -> AF a
 (AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs ze
-  where zs = (\(l,r) -> l+r) <$> zipWithZeros ((y*) <$> xs) ((x*) <$> ys)
+  where zs = (\(l,r) -> l+r) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze = sum $ liftM2 (*) (xs ++ [xe]) (ys ++ [ye])
-Reals `multiply` _ = Reals
-_ `multiply` Reals = Reals
 
 multiplyScalar :: (Eq a, Num a) => a -> AF a -> AF a
 a `multiplyScalar` (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
-0 `multiplyScalar` Reals = zeroAF
-_ `multiplyScalar` Reals = Reals
 
-recipAF :: (Ord a, Fractional a, Bounded a) => AF a -> Maybe (AF a)
+recipAF :: (Ord a, Fractional a) => AF a -> AF a
 recipAF af = do
   let high = hi af
       low  = lo af
   -- Any way to get rid of the if-else statements?
   if low > 0
-    then return $ recipAF' af
+    then recipAF' af
     else if high < 0
-      then negateAF <$> (recipAF $ negateAF af)
-      else Nothing
+      then negateAF . recipAF $ negateAF af
+      else Exception.throw DivisionByZero
 
-recipAF' :: (Ord a, Fractional a, Bounded a) => AF a -> AF a
+recipAF' :: (Ord a, Fractional a) => AF a -> AF a
 recipAF' af = do
   let a = hi af
       b = lo af
@@ -140,28 +123,46 @@ recipAF' af = do
       d = -p*(a-b)^2/(2*a)
   q `addScalar` (p `multiplyScalar` af) `addError` d
 
-divide :: (Ord a, Fractional a, Bounded a) => AF a -> AF a -> Maybe (AF a)
-x `divide` y = (x `multiply`) <$> (recipAF y)
+divide :: (Ord a, Fractional a) => AF a -> AF a -> AF a
+x `divide` y = x `multiply` (recipAF y)
 
 (**) :: (Num a) => AF a -> a -> AF a
 (AF x xs xe) ** y = undefined
 
 -- Helper functions
 
-zipWithZeros :: (Num a, Num b) => [a] -> [b] -> [(a,b)]
-zipWithZeros x y = take (max (length x) (length y)) $ zip infx infy
+embed :: (Num a, Num b) => [a] -> [b] -> [(a,b)]
+embed x y = take (max (length x) (length y)) $ zip infx infy
   where infx = x ++ repeat 0
         infy = y ++ repeat 0
+
+fix :: (Num a, Ord a) => AF a -> [a] -> IA.Interval a
+fix (AF x xs xe) vals = (m - xe)...(m + xe)
+  where em = embed xs vals
+        prod = uncurry (*) <$> em
+        m  = x + sum prod
 
 -- QuickCheck properties
 data Approx a = Approx a (AF a)
   deriving (Show)
 
-valid :: (Ord a, Num a, Bounded a) => Approx a -> Bool
+data EpsV = EpsV [Rational]
+  deriving (Show)
+
+instance Arbitrary EpsV where
+  arbitrary = do
+    l <- listOf arbitrary
+    return . EpsV $ (\x -> (x `mod'` 1) * 2 - 1) <$> l
+  shrink (EpsV l) = filter validEV $ EpsV <$> (shrink l)
+
+valid :: (Ord a, Num a) => Approx a -> Bool
 valid (Approx x af) = x `IA.member` i
   where i = interval af
 
-instance (Ord a, Num a, Arbitrary a, Bounded a, Random a) => Arbitrary (Approx a) where
+validEV :: EpsV -> Bool
+validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
+
+instance (Ord a, Num a, Arbitrary a, Random a) => Arbitrary (Approx a) where
   arbitrary = do
     af <- arbitrary
     let i = interval af
@@ -169,6 +170,9 @@ instance (Ord a, Num a, Arbitrary a, Bounded a, Random a) => Arbitrary (Approx a
     return $ Approx x af
   shrink (Approx x af) = filter valid [Approx x' af' | (x', af') <- shrink (x, af)]
 
-prop_fiaa_addition :: Approx Int -> Approx Int -> Bool
-prop_fiaa_addition (Approx a x) (Approx b y) = (a + b) `IA.member` i
-  where i = interval $ x `add` y
+-- RuKaS14.pdf [1102:2]
+prop_addition :: EpsV -> AF Rational -> AF Rational -> Bool
+prop_addition (EpsV e) x y = x `fix` e + y `fix` e == (x `add` y) `fix` e
+
+prop_subtraction :: EpsV -> AF Rational -> AF Rational -> Bool
+prop_subtraction (EpsV e) x y = x `fix` e - y `fix` e == (x `AffineForm.subtract` y) `fix` e
