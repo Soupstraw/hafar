@@ -185,8 +185,17 @@ prop_addition (EpsV e) x y = x `fix` e + y `fix` e == (x + y) `fix` e
 prop_subtraction :: EpsV -> AF Rational -> AF Rational -> Bool
 prop_subtraction (EpsV e) x y = x `fix` e - y `fix` e == (x - y) `fix` e
 
+prop_multiplication :: EpsV -> AF Rational -> AF Rational -> Property
+prop_multiplication (EpsV e) x y = counterexample str res
+  where lhs = (x * y) `fix` e
+        rhs = x `fix` e * y `fix` e
+        res = lhs `IA.contains` rhs
+        str = (show lhs) ++ "\n" ++ (show rhs)
+
 prop_exponentiation :: EpsV -> AF Rational -> Small Int -> Property
 prop_exponentiation (EpsV e) x y = counterexample str res
   where n = (abs $ getSmall y) `mod` 3
-        res = (x ^ n) `fix` e `IA.contains` ((x `fix` e) ^ n)
-        str = (show $ (x ^ n) `fix` e) ++ "\n" ++ (show $ ((x `fix` e) ^ n))
+        lhs = (x ^ n) `fix` e
+        rhs = (x `fix` e) ^ n
+        res = lhs `IA.contains` rhs
+        str = (show lhs) ++ "\n" ++ (show rhs)
