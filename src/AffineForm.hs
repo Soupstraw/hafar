@@ -17,11 +17,13 @@ import Control.Exception as Exception
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
 import Data.Fixed (mod')
+import Data.Ratio (approxRational, (%))
 
 import System.Random
+import Test.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen
-import Test.QuickCheck.Property
+import Test.QuickCheck.Modifiers
 
 data AF a
   = AF a [a] a
@@ -43,6 +45,18 @@ instance (Num a, Arbitrary a) => Arbitrary (AF a) where
   shrink (AF x xs xe) =
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
 
+instance (Num a) => Num (AF a) where
+  (+) = add
+  (*) = multiply
+  abs = undefined    -- TODO
+  signum = undefined -- TODO
+  fromInteger x = AF (fromInteger x) [] 0
+  negate = negateAF
+
+instance (Fractional a, Ord a) => Fractional (AF a) where
+  recip = recipAF
+  fromRational x = AF (fromRational x) [] 0
+
 type AFIndex = Int
 type AFM = State AFIndex
 
@@ -61,7 +75,7 @@ newFromInterval i = do
 range :: (Num a) => AF a -> a
 range (AF _ xs xe) = xe + (sum $ abs <$> xs)
 
-midpoint :: (Num a) => AF a -> a
+midpoint :: AF a -> a
 midpoint (AF x _ _) = x
 
 lo :: (Num a) => AF a -> a
@@ -73,10 +87,10 @@ hi af = (midpoint af) + (range af)
 interval :: (Num a, Ord a) => AF a -> IA.Interval a
 interval af = (lo af)...(hi af)
 
--- Affine arithmetic operations
+member :: (Num a, Ord a) => a -> AF a -> Bool
+member x af = x `IA.member` (interval af)
 
-zeroAF :: (Num a) => AF a
-zeroAF = AF 0 [] 0
+-- Affine arithmetic operations
 
 addError :: (Num a) => AF a -> a -> AF a
 addError (AF x xs xe) e = AF x xs (xe + e)
@@ -92,13 +106,10 @@ add :: (Num a) => AF a -> AF a -> AF a
 negateAF :: (Num a) => AF a -> AF a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
-subtract :: (Num a) => AF a -> AF a -> AF a
-x `subtract` y = x `add` (negateAF y)
-
 multiply :: (Num a) => AF a -> AF a -> AF a
 (AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs ze
   where zs = (\(l,r) -> l+r) <$> embed ((y*) <$> xs) ((x*) <$> ys)
-        ze = sum $ liftM2 (*) (xs ++ [xe]) (ys ++ [ye])
+        ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
 
 multiplyScalar :: (Eq a, Num a) => a -> AF a -> AF a
 a `multiplyScalar` (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
@@ -125,9 +136,6 @@ recipAF' af = do
 
 divide :: (Ord a, Fractional a) => AF a -> AF a -> AF a
 x `divide` y = x `multiply` (recipAF y)
-
-(**) :: (Num a) => AF a -> a -> AF a
-(AF x xs xe) ** y = undefined
 
 -- Helper functions
 
@@ -172,7 +180,13 @@ instance (Ord a, Num a, Arbitrary a, Random a) => Arbitrary (Approx a) where
 
 -- RuKaS14.pdf [1102:2]
 prop_addition :: EpsV -> AF Rational -> AF Rational -> Bool
-prop_addition (EpsV e) x y = x `fix` e + y `fix` e == (x `add` y) `fix` e
+prop_addition (EpsV e) x y = x `fix` e + y `fix` e == (x + y) `fix` e
 
 prop_subtraction :: EpsV -> AF Rational -> AF Rational -> Bool
-prop_subtraction (EpsV e) x y = x `fix` e - y `fix` e == (x `AffineForm.subtract` y) `fix` e
+prop_subtraction (EpsV e) x y = x `fix` e - y `fix` e == (x - y) `fix` e
+
+prop_exponentiation :: EpsV -> AF Rational -> Small Int -> Property
+prop_exponentiation (EpsV e) x y = counterexample str res
+  where n = (abs $ getSmall y) `mod` 3
+        res = (x ^ n) `fix` e `IA.contains` ((x `fix` e) ^ n)
+        str = (show $ (x ^ n) `fix` e) ++ "\n" ++ (show $ ((x `fix` e) ^ n))
