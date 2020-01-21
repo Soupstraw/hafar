@@ -12,18 +12,20 @@ module AffineForm (newEps,
                   ) where
 
 import Control.Monad.State hiding (fix)
-import Control.Exception as Exception
+import Control.Exception (Exception, throw, evaluate, try)
 
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
 import Data.Fixed (mod')
 import Data.Ratio (approxRational, (%))
+import Data.Either (fromLeft, fromRight)
 
 import System.Random
 import Test.QuickCheck
 import Test.QuickCheck.Arbitrary
 import Test.QuickCheck.Gen
 import Test.QuickCheck.Modifiers
+import Test.QuickCheck.Property
 
 data AF a
   = AF a [a] a
@@ -31,6 +33,7 @@ data AF a
 
 data AFException
   = DivisionByZero
+  | LogFromNegative
 
 instance Show AFException where
   show DivisionByZero = "division by zero"
@@ -79,7 +82,7 @@ midpoint :: AF a -> a
 midpoint (AF x _ _) = x
 
 lo :: (Num a) => AF a -> a
-lo af = (midpoint af) + (range af)
+lo af = (midpoint af) - (range af)
 
 hi :: (Num a) => AF a -> a
 hi af = (midpoint af) + (range af)
@@ -115,24 +118,35 @@ multiplyScalar :: (Eq a, Num a) => a -> AF a -> AF a
 a `multiplyScalar` (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
 
 recipAF :: (Ord a, Fractional a) => AF a -> AF a
-recipAF af = do
-  let high = hi af
-      low  = lo af
+recipAF af =
   -- Any way to get rid of the if-else statements?
   if low > 0
     then recipAF' af
     else if high < 0
       then negateAF . recipAF $ negateAF af
-      else Exception.throw DivisionByZero
+      else throw DivisionByZero
+  where high = hi af
+        low  = lo af
 
 recipAF' :: (Ord a, Fractional a) => AF a -> AF a
-recipAF' af = do
-  let a = hi af
-      b = lo af
-      p = -1/b^2
-      q = -p*(a+b)^2/(2*a)
-      d = -p*(a-b)^2/(2*a)
+recipAF' af =
   q `addScalar` (p `multiplyScalar` af) `addError` d
+  where a = hi af
+        b = lo af
+        p = -1/b^2
+        q = -p*(a+b)^2/(2*a)
+        d = -p*(a-b)^2/(2*a)
+
+logAF :: (Ord a, Floating a) => AF a -> AF a
+logAF af =
+  if a > 0
+    then q `addScalar` (p `multiplyScalar` af) `addError` d
+    else throw LogFromNegative
+  where a = hi af
+        b = lo af
+        p = 1 / a
+        q = ((log a)+(log b)-p*(a+b))/2
+        d = ((log a)-(log b)+p*(a-b))/2
 
 divide :: (Ord a, Fractional a) => AF a -> AF a -> AF a
 x `divide` y = x `multiply` (recipAF y)
@@ -156,6 +170,20 @@ data Approx a = Approx a (AF a)
 
 data EpsV = EpsV [Rational]
   deriving (Show)
+
+newtype ZerolessAF = ZerolessAF (AF Rational)
+  deriving (Show)
+
+zerolessaf :: ZerolessAF -> AF Rational
+zerolessaf (ZerolessAF af) = af
+
+instance Arbitrary ZerolessAF where
+  arbitrary = do
+    af@(AF x _ _) <- arbitrary
+    let r = 1 + range af
+        z | x >= 0 = r `addScalar` af
+          | otherwise = (-r) `addScalar` af
+    return $ ZerolessAF z
 
 instance Arbitrary EpsV where
   arbitrary = do
@@ -197,5 +225,12 @@ prop_exponentiation (EpsV e) x y = counterexample str res
   where n = (abs $ getSmall y) `mod` 3
         lhs = (x ^ n) `fix` e
         rhs = (x `fix` e) ^ n
+        res = lhs `IA.contains` rhs
+        str = (show lhs) ++ "\n" ++ (show rhs)
+
+prop_recip :: EpsV -> ZerolessAF -> Property
+prop_recip (EpsV e) (ZerolessAF x) = counterexample str $ property res
+  where lhs = (recipAF x) `fix` e
+        rhs = 1 / (x `fix` e)
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
