@@ -31,6 +31,7 @@ data AFException
 
 instance Show AFException where
   show DivisionByZero = "division by zero"
+  show LogFromNegative = "logarithm from a negative number"
 
 instance Exception AFException
 
