@@ -125,7 +125,7 @@ negateAF :: (Num a) => AF a -> AF a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
 multiply :: (Num a) => AF a -> AF a -> AF a
-(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs ze
+(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze+x*(xe+ye))
   where zs = (\(l,r) -> l+r) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
 

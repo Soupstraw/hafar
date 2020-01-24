@@ -86,21 +86,21 @@ prop_addition (EpsV e) x y = counterexample str res
   where lhs = (x + y) `fix` e
         rhs = x `fix` e + y `fix` e
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_subtraction :: EpsV Rational -> AF Rational -> AF Rational -> Property
 prop_subtraction (EpsV e) x y = counterexample str res
   where lhs = (x - y) `fix` e
         rhs = x `fix` e - y `fix` e
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_multiplication :: EpsV Rational -> AF Rational -> AF Rational -> Property
 prop_multiplication (EpsV e) x y = counterexample str res
   where lhs = (x * y) `fix` e
         rhs = x `fix` e * y `fix` e
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_power :: EpsV Rational -> AF Rational -> Small Int -> Property
 prop_power (EpsV e) x y = counterexample str res
@@ -108,56 +108,49 @@ prop_power (EpsV e) x y = counterexample str res
         lhs = (x ^ n) `fix` e
         rhs = (x `fix` e) ^ n
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_recip :: EpsV Rational -> ZerolessAF Rational -> Property
 prop_recip (EpsV e) (ZerolessAF x) = counterexample str $ property res
   where lhs = (recip x) `fix` e
         rhs = recip (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_log :: EpsV Double -> PositiveAF Double -> Property
 prop_log (EpsV e) (PositiveAF x) = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (log x) `fix` e
         rhs = log (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_exp :: EpsV Double -> SmallAF Double -> Property
 prop_exp (EpsV e) (SmallAF x) = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (exp x) `fix` e
         rhs = exp (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_cos :: EpsV Double -> AF Double -> Property
 prop_cos (EpsV e) x = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (cos x) `fix` e
         rhs = cos (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_sin :: EpsV Double -> AF Double -> Property
 prop_sin (EpsV e) x = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (sin x) `fix` e
         rhs = sin (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
-
-prop_tan :: EpsV Double -> AF Double -> Property
-prop_tan (EpsV e) x = counterexample str $ property res
-  where lhs = IA.inflate tinyFloat $ (tan x) `fix` e
-        rhs = tan $ (x `fix` e)
-        res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 prop_abs :: EpsV Double -> AF Double -> Property
 prop_abs (EpsV e) x = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (abs x) `fix` e
         rhs = abs $ x `fix` e
         res = lhs `IA.contains` rhs
-        str = (show lhs) ++ "\n" ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
 --
 -- Testing boilerplate
