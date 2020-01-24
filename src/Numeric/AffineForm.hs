@@ -36,11 +36,11 @@ instance Show AFException where
 
 instance Exception AFException
 
-instance (Num a, Arbitrary a) => Arbitrary (AF a) where
+instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF a) where
   arbitrary = do
                 x <- arbitrary
                 xs <- arbitrary
-                xe <- arbitrary
+                (Positive xe) <- arbitrary
                 return $ AF x xs xe
   shrink (AF x xs xe) =
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
@@ -125,9 +125,10 @@ negateAF :: (Num a) => AF a -> AF a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
 multiply :: (Num a) => AF a -> AF a -> AF a
-(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze+x*(xe+ye))
-  where zs = (\(l,r) -> l+r) <$> embed ((y*) <$> xs) ((x*) <$> ys)
+(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze+ze2)
+  where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
+        ze2 = (abs x*ye) + (abs y*xe)
 
 (.*) :: (Eq a, Num a) => a -> AF a -> AF a
 a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
