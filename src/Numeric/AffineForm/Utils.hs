@@ -14,3 +14,6 @@ pmod' :: (Ord a, RealFrac a) => a -> a -> a
 pmod' a b
   | a < 0 = pmod' (a + b*(fromIntegral . ceiling . abs $ a/b)) b
   | otherwise = a `mod'` b
+
+clamp :: (Ord a) => a -> a -> a -> a
+clamp x a b = min (max a x) b

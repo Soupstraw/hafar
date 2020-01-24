@@ -5,14 +5,27 @@ import Test.QuickCheck
 import Control.Monad
 import System.Random
 import Text.Printf
+import Data.Fixed (mod')
 
 import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate)
 import Numeric.AffineForm
+import Numeric.AffineForm.Utils
+
+--
+-- Generators and modifiers
+--
 
 data Approx a = Approx a (AF a)
 
 data EpsV a = EpsV [a]
   deriving (Show)
+
+instance (Real a, Arbitrary a) => Arbitrary (EpsV a) where
+  arbitrary = do
+    l <- listOf $ arbitrary
+    let ls = (\x -> (x `mod'` 2) -1) <$> l
+    return $ EpsV ls
+  shrink (EpsV l) = filter validEV $ EpsV <$> (shrink l)
 
 newtype ZerolessAF a = ZerolessAF (AF a)
   deriving (Show)
@@ -36,18 +49,17 @@ instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (PositiveAF a) where
     let m = 1/100000 + max (midpoint af) (range af)
     return . PositiveAF $ setMidpoint m af
 
-instance (Real a, Arbitrary a, Random a) => Arbitrary (EpsV a) where
+newtype SmallAF a = SmallAF (AF a)
+  deriving (Show)
+
+instance (Floating a, Ord a, Arbitrary a) => Arbitrary (SmallAF a) where
   arbitrary = do
-    l <- listOf $ choose (-1, 1)
-    return $ EpsV l
-  shrink (EpsV l) = filter validEV $ EpsV <$> (shrink l)
-
-valid :: (Ord a, Num a) => Approx a -> Bool
-valid (Approx x af) = x `IA.member` i
-  where i = interval af
-
-validEV :: (Ord a, Num a) => EpsV a -> Bool
-validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
+    size <- getSize
+    af <- arbitrary
+    let s = log . fromIntegral $ size + 1
+        k = s / (range af)
+        m = clamp (midpoint af) (-s) s
+    return . SmallAF $ setMidpoint m (k .* af)
 
 instance (Ord a, Num a, Arbitrary a, Random a) => Arbitrary (Approx a) where
   arbitrary = do
@@ -57,39 +69,50 @@ instance (Ord a, Num a, Arbitrary a, Random a) => Arbitrary (Approx a) where
     return $ Approx x af
   shrink (Approx x af) = filter valid [Approx x' af' | (x', af') <- shrink (x, af)]
 
+valid :: (Ord a, Num a) => Approx a -> Bool
+valid (Approx x af) = x `IA.member` i
+  where i = interval af
+
+validEV :: (Ord a, Num a) => EpsV a -> Bool
+validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
+
+--
+-- Properties
+--
+
 -- RuKaS14.pdf [1102:2]
-prop_addition :: EpsV Double -> AF Double -> AF Double -> Property
+prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
 prop_addition (EpsV e) x y = counterexample str res
-  where lhs = IA.inflate tinyFloat $ (x + y) `fix` e
+  where lhs = (x + y) `fix` e
         rhs = x `fix` e + y `fix` e
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
-prop_subtraction :: EpsV Double -> AF Double -> AF Double -> Property
+prop_subtraction :: EpsV Rational -> AF Rational -> AF Rational -> Property
 prop_subtraction (EpsV e) x y = counterexample str res
-  where lhs = IA.inflate tinyFloat $ (x - y) `fix` e
+  where lhs = (x - y) `fix` e
         rhs = x `fix` e - y `fix` e
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
-prop_multiplication :: EpsV Double -> AF Double -> AF Double -> Property
+prop_multiplication :: EpsV Rational -> AF Rational -> AF Rational -> Property
 prop_multiplication (EpsV e) x y = counterexample str res
-  where lhs = IA.inflate tinyFloat $ (x * y) `fix` e
+  where lhs = (x * y) `fix` e
         rhs = x `fix` e * y `fix` e
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
-prop_power :: EpsV Double -> AF Double -> Small Int -> Property
+prop_power :: EpsV Rational -> AF Rational -> Small Int -> Property
 prop_power (EpsV e) x y = counterexample str res
   where n = (abs $ getSmall y) `mod` 3
-        lhs = IA.inflate tinyFloat $ (x ^ n) `fix` e
+        lhs = (x ^ n) `fix` e
         rhs = (x `fix` e) ^ n
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
-prop_recip :: EpsV Double -> ZerolessAF Double -> Property
+prop_recip :: EpsV Rational -> ZerolessAF Rational -> Property
 prop_recip (EpsV e) (ZerolessAF x) = counterexample str $ property res
-  where lhs = IA.inflate tinyFloat $ (recip x) `fix` e
+  where lhs = (recip x) `fix` e
         rhs = recip (x `fix` e)
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
@@ -101,8 +124,8 @@ prop_log (EpsV e) (PositiveAF x) = counterexample str $ property res
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
-prop_exp :: EpsV Double -> AF Double -> Property
-prop_exp (EpsV e) x = counterexample str $ property res
+prop_exp :: EpsV Double -> SmallAF Double -> Property
+prop_exp (EpsV e) (SmallAF x) = counterexample str $ property res
   where lhs = IA.inflate tinyFloat $ (exp x) `fix` e
         rhs = exp (x `fix` e)
         res = lhs `IA.contains` rhs
@@ -129,9 +152,19 @@ prop_tan (EpsV e) x = counterexample str $ property res
         res = lhs `IA.contains` rhs
         str = (show lhs) ++ "\n" ++ (show rhs)
 
+prop_abs :: EpsV Double -> AF Double -> Property
+prop_abs (EpsV e) x = counterexample str $ property res
+  where lhs = IA.inflate tinyFloat $ (abs x) `fix` e
+        rhs = abs $ x `fix` e
+        res = lhs `IA.contains` rhs
+        str = (show lhs) ++ "\n" ++ (show rhs)
+
+--
 -- Testing boilerplate
+--
 
 tinyFloat = 1e-10
+tinyRational = 1/1000000000 :: Rational
 
 return [] -- This is a hack to make the quickCheckAll template work correctly
 

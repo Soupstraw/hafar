@@ -6,7 +6,8 @@ module Numeric.AffineForm (AFM, AF, newEps,
                            interval,
                            member,
                            setMidpoint,
-                           fix
+                           fix,
+                           (.+), (.*)
                           ) where
 
 import Control.Monad.State hiding (fix)
@@ -39,7 +40,8 @@ instance (Num a, Arbitrary a) => Arbitrary (AF a) where
   arbitrary = do
                 x <- arbitrary
                 xs <- arbitrary
-                return $ AF x xs 0
+                xe <- arbitrary
+                return $ AF x xs xe
   shrink (AF x xs xe) =
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
 
@@ -82,8 +84,8 @@ newEps = do
 newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM (AF a)
 newFromInterval i = do
   eps <- newEps
-  let mult = ((IA.width i) / 2) `multiplyScalar` eps
-  return $ (IA.midpoint i) `addScalar` mult
+  let mult = ((IA.width i) / 2) .* eps
+  return $ (IA.midpoint i) .+ mult
 
 range :: (Num a) => (AF a) -> a
 range (AF _ xs xe) = xe + (sum $ abs <$> xs)
@@ -112,8 +114,8 @@ addError :: (Num a) => AF a -> a -> AF a
 addError (AF x xs xe) e = AF x xs (xe + e)
 
 -- Add scalar
-addScalar :: (Num a) => a -> AF a -> AF a
-a `addScalar` (AF x xs xe) = AF (x+a) xs xe
+(.+) :: (Num a) => a -> AF a -> AF a
+a .+ (AF x xs xe) = AF (x+a) xs xe
 
 add :: (Num a) => AF a -> AF a -> AF a
 (AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe+ye)
@@ -127,8 +129,8 @@ multiply :: (Num a) => AF a -> AF a -> AF a
   where zs = (\(l,r) -> l+r) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
 
-multiplyScalar :: (Eq a, Num a) => a -> AF a -> AF a
-a `multiplyScalar` (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
+(.*) :: (Eq a, Num a) => a -> AF a -> AF a
+a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
 
 recipAF :: (Ord a, Fractional a) => AF a -> AF a
 recipAF af =
@@ -170,7 +172,7 @@ cosAF af
                 rh = abs (1 - (min (cos a) (cos b)))/2
 
 sinAF :: (Ord a, RealFrac a, Floating a) => AF a -> AF a
-sinAF af = cosAF ((-pi/2) `addScalar` af)
+sinAF af = cosAF ((-pi/2) .+ af)
 
 absAF :: (Ord a, Fractional a) => AF a -> AF a
 absAF af
@@ -204,4 +206,4 @@ minrange f f' = \af ->
       q = ((f a)+(f b)-p*(a+b))/2
       d = abs ((f a)-(f b)+p*(a-b))/2
   in
-  q `addScalar` (p `multiplyScalar` af) `addError` d
+  q .+ (p .* af) `addError` d
