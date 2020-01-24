@@ -59,18 +59,18 @@ instance (Fractional a, Ord a) => Fractional (AF a) where
 
 instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
   pi = AF pi [] 0
-  exp = expAF
-  log = logAF
+  exp = minrange exp exp
+  log = minrange log recip
   sin = sinAF
   cos = cosAF
-  asin = undefined
-  acos = undefined
-  atan = undefined
-  sinh = undefined
-  cosh = undefined
-  asinh = undefined
-  acosh = undefined
-  atanh = undefined
+  asin = minrange asin $ \x -> 1/sqrt (1-x^2)
+  acos = minrange acos $ \x -> -1/sqrt (1-x^2)
+  atan = minrange atan $ \x -> 1/(x^2+1)
+  sinh = minrange sinh cosh
+  cosh = minrange cosh sinh
+  asinh = minrange asinh $ \x -> 1/sqrt (x^2+1)
+  acosh = minrange acosh $ \x -> 1/((sqrt (x-1))*(sqrt (x+1)))
+  atanh = minrange atanh $ \x -> 1/(1-x^2)
 
 type AFIndex = Int
 type AFM = State AFIndex
@@ -143,18 +143,6 @@ recipAF af =
       else throw DivisionByZero
   where high = hi af
         low  = lo af
-
-divide :: (Ord a, Fractional a) => AF a -> AF a -> AF a
-x `divide` y = x `multiply` (recipAF y)
-
-logAF :: (Ord a, Floating a) => AF a -> AF a
-logAF af =
-  if lo af > 0
-    then minrange log recip af
-    else throw LogFromNegative
-
-expAF :: (Ord a, Floating a) => AF a -> AF a
-expAF af = minrange exp exp af
 
 cosAF :: (Ord a, RealFrac a, Floating a) => AF a -> AF a
 cosAF af
