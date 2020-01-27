@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 
 import Test.QuickCheck
 
@@ -7,7 +8,7 @@ import System.Random
 import Text.Printf
 import Data.Fixed (mod')
 
-import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate)
+import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate, Interval)
 import Numeric.AffineForm
 import Numeric.AffineForm.Utils
 
@@ -87,78 +88,68 @@ validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
 -- Properties
 --
 
--- RuKaS14.pdf [1102:2]
-prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
-prop_addition (EpsV e) x y = counterexample str res
-  where lhs = (x + y) `fix` e
-        rhs = x `fix` e + y `fix` e
+-- Generalized
+
+correctnessPropUnary :: (Num a, Ord a, Show a) =>
+  (AF a -> AF a) ->
+  (IA.Interval a -> IA.Interval a) ->
+  [a] ->
+  AF a ->
+  Property
+
+correctnessPropUnary f g e x = counterexample str res
+  where lhs = (f x) `fix` e
+        rhs = g (x `fix` e)
         res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+        str = "AA: " ++ (show lhs) ++ "\n"
+           ++ "IA: " ++ (show rhs)
+
+correctnessPropBinary :: (Num a, Ord a, Show a) =>
+  (AF a -> AF a -> AF a) ->
+  (IA.Interval a -> IA.Interval a -> IA.Interval a) ->
+  [a] ->
+  AF a ->
+  AF a ->
+  Property
+
+correctnessPropBinary f g e x y = counterexample str res
+  where lhs = (f x y) `fix` e
+        rhs = g (x `fix` e) (y `fix` e)
+        res = lhs `IA.contains` rhs
+        str = "AA: " ++ (show lhs) ++ "\n"
+           ++ "IA: " ++ (show rhs)
+
+-- RuKaS14.pdf [1102:2]
+-- prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
+-- prop_addition (EpsV e) x y = counterexample str res
+--   where lhs = (x + y) `fix` e
+--         rhs = x `fix` e + y `fix` e
+--         res = lhs `IA.contains` rhs
+--         str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+
+prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
+prop_addition (EpsV e) x y = correctnessPropBinary (+) (+) e x y
 
 prop_subtraction :: EpsV Rational -> AF Rational -> AF Rational -> Property
-prop_subtraction (EpsV e) x y = counterexample str res
-  where lhs = (x - y) `fix` e
-        rhs = x `fix` e - y `fix` e
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_subtraction (EpsV e) x y = correctnessPropBinary (-) (-) e x y
 
 prop_multiplication :: EpsV Rational -> AF Rational -> AF Rational -> Property
-prop_multiplication (EpsV e) x y = counterexample str res
-  where lhs = (x * y) `fix` e
-        rhs = x `fix` e * y `fix` e
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_multiplication (EpsV e) x y = correctnessPropBinary (*) (*) e x y
 
 prop_power :: EpsV Rational -> AF Rational -> SmallExponent Integer -> Property
-prop_power (EpsV e) x (SmallExponent n) = counterexample str res
-  where lhs = (x ^ n) `fix` e
-        rhs = (x `fix` e) ^ n
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_power (EpsV e) x (SmallExponent n) = correctnessPropUnary (^n) (^n) e x
 
 prop_recip :: EpsV Rational -> ZerolessAF Rational -> Property
-prop_recip (EpsV e) (ZerolessAF x) = counterexample str $ property res
-  where lhs = (recip x) `fix` e
-        rhs = recip (x `fix` e)
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_recip (EpsV e) (ZerolessAF x) = correctnessPropUnary recip recip e x
 
 prop_log :: EpsV Double -> PositiveAF Double -> Property
-prop_log (EpsV e) (PositiveAF x) = counterexample str $ property res
-  where lhs = IA.inflate tinyFloat $ (log x) `fix` e
-        rhs = log (x `fix` e)
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_log (EpsV e) (PositiveAF x) = correctnessPropUnary log log e x
 
 prop_exp :: EpsV Double -> SmallAF Double -> Property
-prop_exp (EpsV e) (SmallAF x) = counterexample str $ property res
-  where lhs = IA.inflate tinyFloat $ (exp x) `fix` e
-        rhs = exp (x `fix` e)
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
-
--- Disabled these tests for now since trig seems to be broken in the intervals library
-
--- prop_cos :: EpsV Double -> AF Double -> Property
--- prop_cos (EpsV e) x = counterexample str $ property res
---   where lhs = IA.inflate tinyFloat $ (cos x) `fix` e
---         rhs = cos (x `fix` e)
---         res = lhs `IA.contains` rhs
---         str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
-
--- prop_sin :: EpsV Double -> AF Double -> Property
--- prop_sin (EpsV e) x = counterexample str $ property res
---   where lhs = IA.inflate tinyFloat $ (sin x) `fix` e
---         rhs = sin (x `fix` e)
---         res = lhs `IA.contains` rhs
---         str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_exp (EpsV e) (SmallAF x) = correctnessPropUnary exp exp e x
 
 prop_abs :: EpsV Double -> AF Double -> Property
-prop_abs (EpsV e) x = counterexample str $ property res
-  where lhs = IA.inflate tinyFloat $ (abs x) `fix` e
-        rhs = abs $ x `fix` e
-        res = lhs `IA.contains` rhs
-        str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
+prop_abs (EpsV e) x = correctnessPropUnary abs abs e x
 
 --
 -- Testing boilerplate
