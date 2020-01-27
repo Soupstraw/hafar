@@ -1,6 +1,6 @@
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
-                           range,
+                           radius,
                            midpoint,
                            lo, hi,
                            interval,
@@ -22,10 +22,12 @@ import Data.Either (fromLeft, fromRight)
 
 import Test.QuickCheck
 
+-- | An affine form is defined by its midpoint, list of epsilon coefficients and an error coefficient
 data AF a
   = AF a [a] a
   deriving (Show)
 
+-- Exceptions are currently not used
 data AFException
   = DivisionByZero
   | LogFromNegative
@@ -75,45 +77,58 @@ instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
 type AFIndex = Int
 type AFM = State AFIndex
 
+-- | This gives an affine form with midpoint 0 and radius 1.
+-- This affine form does not share epsilons with any affine forms created before it.
+-- It can be used to instantiate new affine forms.
 newEps :: Num a => AFM (AF a)
 newEps = do
   idx <- get
   put $ idx + 1
   return $ AF 0 (replicate idx 0 ++ [1]) 0
 
+-- | Creates a new affine form that covers the interval.
+-- This affine form does not share epsilons with any affine forms created before it.
 newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM (AF a)
 newFromInterval i = do
   eps <- newEps
   let mult = ((IA.width i) / 2) .* eps
   return $ (IA.midpoint i) .+ mult
 
-range :: (Num a) => (AF a) -> a
-range (AF _ xs xe) = xe + (sum $ abs <$> xs)
+-- | Gives the radius of the affine form
+radius :: (Num a) => (AF a) -> a
+radius (AF _ xs xe) = xe + (sum $ abs <$> xs)
 
+-- | Gives the midpoint of the affine form (the first term of the affine form).
 midpoint :: AF a -> a
 midpoint (AF x _ _) = x
 
+-- | Gives the minimal possible value of the affine form
 lo :: (Num a) => AF a -> a
-lo af = (midpoint af) - (range af)
+lo af = (midpoint af) - (radius af)
 
+-- | Gives the maximal possible value of the affine form
 hi :: (Num a) => AF a -> a
-hi af = (midpoint af) + (range af)
+hi af = (midpoint af) + (radius af)
 
+-- | Gives the corresponding interval of the affine form
 interval :: (Num a, Ord a) => AF a -> IA.Interval a
 interval af = (lo af)...(hi af)
 
+-- | Returns whether the element is representable by the affine form
 member :: (Num a, Ord a) => a -> AF a -> Bool
 member x af = x `IA.member` (interval af)
 
 -- Affine arithmetic operations
 
+-- | Sets the midpoint of the affine form
 setMidpoint :: a -> AF a -> AF a
 setMidpoint m (AF x xs xe) = AF m xs xe
 
+-- | Adds the value to the error term of the affine form
 addError :: (Num a) => AF a -> a -> AF a
 addError (AF x xs xe) e = AF x xs (xe + e)
 
--- Add scalar
+-- | Adds a scalar value to the affine form
 (.+) :: (Num a) => a -> AF a -> AF a
 a .+ (AF x xs xe) = AF (x+a) xs xe
 
@@ -130,8 +145,9 @@ multiply :: (Num a) => AF a -> AF a -> AF a
         ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
         ze2 = (abs x*ye) + (abs y*xe)
 
+-- | Multiplies the affine form by a scalar
 (.*) :: (Eq a, Num a) => a -> AF a -> AF a
-a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) xe
+a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) $ a * xe
 
 recipAF :: (Ord a, Fractional a) => AF a -> AF a
 recipAF af =
@@ -146,7 +162,7 @@ recipAF af =
 
 cosAF :: (Ord a, RealFrac a, Floating a) => AF a -> AF a
 cosAF af
-  | range af < pi = f af
+  | radius af < pi = f af
   | otherwise = AF 0 [] 1
   where a = lo af `pmod'` (2*pi)
         b = hi af `pmod'` (2*pi)
@@ -180,13 +196,15 @@ signumAF af
 -- Helper functions
 --
 
+-- | Fixes the epsilons of the affine form to the values in the list
+-- The list will be extended by zeroes to match the length of the list of coefficients
 fix :: (Num a, Ord a) => AF a -> [a] -> IA.Interval a
 fix (AF x xs xe) vals = (m - xe)...(m + xe)
   where em = embed xs vals
         prod = uncurry (*) <$> em
         m  = x + sum prod
 
--- Returns a min-range approximation function for given function and its derivative
+-- | Returns a min-range approximation function for given function and its derivative.
 minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> (AF a -> AF a)
 minrange f f' = \af ->
   let a = hi af

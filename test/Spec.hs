@@ -41,8 +41,8 @@ newtype ZerolessAF a = ZerolessAF (AF a)
 instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (ZerolessAF a) where
   arbitrary = do
     af <- arbitrary
-    let mh = max (midpoint af) (1 + range af)
-        ml = min (midpoint af) ((negate $ range af) - 1)
+    let mh = max (midpoint af) (1 + radius af)
+        ml = min (midpoint af) ((negate $ radius af) - 1)
         res
           | midpoint af >= 0 = ZerolessAF $ setMidpoint mh af
           | otherwise = ZerolessAF $ setMidpoint ml af
@@ -54,7 +54,7 @@ newtype PositiveAF a = PositiveAF (AF a)
 instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (PositiveAF a) where
   arbitrary = do
     af <- arbitrary
-    let m = 1/100000 + max (midpoint af) (range af)
+    let m = 1/100000 + max (midpoint af) (radius af)
     return . PositiveAF $ setMidpoint m af
 
 newtype SmallAF a = SmallAF (AF a)
@@ -65,7 +65,7 @@ instance (Floating a, Ord a, Arbitrary a) => Arbitrary (SmallAF a) where
     size <- getSize
     af <- arbitrary
     let s = log . fromIntegral $ size + 1
-        k = s / (range af)
+        k = s / (radius af)
         m = clamp (midpoint af) (-s) s
     return . SmallAF $ setMidpoint m (k .* af)
 
@@ -154,9 +154,6 @@ prop_abs (EpsV e) x = correctnessPropUnary abs abs e x
 --
 -- Testing boilerplate
 --
-
-tinyFloat = 1e-10
-tinyRational = 1/1000000000 :: Rational
 
 return [] -- This is a hack to make the quickCheckAll template work correctly
 
