@@ -1,9 +1,9 @@
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
-                           radius,
-                           midpoint,
-                           lo, hi,
-                           interval,
+                           radius, evalRadius,
+                           midpoint, evalMidpoint,
+                           lo, hi, evalHi, evalLo,
+                           interval, evalInterval,
                            member,
                            setMidpoint,
                            fix,
@@ -27,7 +27,6 @@ data AF a
   = AF a [a] a
   deriving (Show)
 
--- Exceptions are currently not used
 data AFException
   = DivisionByZero
   | LogFromNegative
@@ -62,7 +61,9 @@ instance (Fractional a, Ord a) => Fractional (AF a) where
 instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
   pi = AF pi [] 0
   exp = minrange exp exp
-  log = minrange log recip
+  log x
+    | lo x > 0  = minrange log recip x
+    | otherwise = throw LogFromNegative
   sin = sinAF
   cos = cosAF
   asin = minrange asin $ \x -> 1/sqrt (1-x^2)
@@ -95,24 +96,39 @@ newFromInterval i = do
   return $ (IA.midpoint i) .+ mult
 
 -- | Gives the radius of the affine form
-radius :: (Num a) => (AF a) -> a
+radius :: (Num a) => AF a -> a
 radius (AF _ xs xe) = xe + (sum $ abs <$> xs)
+
+evalRadius :: (Num a) => AFM (AF a) -> a
+evalRadius = evalWith radius
 
 -- | Gives the midpoint of the affine form (the first term of the affine form).
 midpoint :: AF a -> a
 midpoint (AF x _ _) = x
 
+evalMidpoint :: AFM (AF a) -> a
+evalMidpoint = evalWith midpoint
+
 -- | Gives the minimal possible value of the affine form
 lo :: (Num a) => AF a -> a
 lo af = (midpoint af) - (radius af)
+
+evalLo :: (Num a) => AFM (AF a) -> a
+evalLo = evalWith lo
 
 -- | Gives the maximal possible value of the affine form
 hi :: (Num a) => AF a -> a
 hi af = (midpoint af) + (radius af)
 
+evalHi :: (Num a) => AFM (AF a) -> a
+evalHi = evalWith hi
+
 -- | Gives the corresponding interval of the affine form
 interval :: (Num a, Ord a) => AF a -> IA.Interval a
 interval af = (lo af)...(hi af)
+
+evalInterval :: (Num a, Ord a) => AFM (AF a) -> IA.Interval a
+evalInterval = evalWith interval
 
 -- | Returns whether the element is representable by the affine form
 member :: (Num a, Ord a) => a -> AF a -> Bool
@@ -214,3 +230,8 @@ minrange f f' = \af ->
       d = abs ((f a)-(f b)+p*(a-b))/2
   in
   q .+ (p .* af) `addError` d
+
+-- | Evaluates the monad after applying a function
+evalWith :: (a -> b) -> AFM a -> b
+evalWith f afm = evalState (afm >>= return . f) 0
+

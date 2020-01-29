@@ -8,7 +8,10 @@ cabal-version: 1.12
 
 name:           hafar
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/hafar#readme>
+category:       Numeric
+synopsis:       Affine arithmetic for Haskell
+description:
+  Hafar is an affine arithmetic library for Haskell...
 homepage:       https://github.com/githubuser/hafar#readme
 bug-reports:    https://github.com/githubuser/hafar/issues
 author:         Author name here
