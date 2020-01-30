@@ -1,9 +1,9 @@
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
-                           radius, evalRadius,
-                           midpoint, evalMidpoint,
-                           lo, hi, evalHi, evalLo,
-                           interval, evalInterval,
+                           radius,
+                           midpoint,
+                           lo, hi,
+                           interval,
                            member,
                            setMidpoint,
                            fix,
@@ -26,6 +26,8 @@ import Test.QuickCheck
 data AF a
   = AF a [a] a
   deriving (Show)
+
+data Curvature = Convex | Concave
 
 data AFException
   = DivisionByZero
@@ -60,22 +62,25 @@ instance (Fractional a, Ord a) => Fractional (AF a) where
 
 instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
   pi = AF pi [] 0
-  exp = minrange exp exp
+  exp = minrange exp exp Convex
   log x
-    | lo x > 0  = minrange log recip x
+    | lo x > 0  = minrange log recip Concave x
     | otherwise = throw LogFromNegative
   sin = sinAF
   cos = cosAF
-  asin = minrange asin $ \x -> 1/sqrt (1-x^2)
-  acos = minrange acos $ \x -> -1/sqrt (1-x^2)
-  atan = minrange atan $ \x -> 1/(x^2+1)
-  sinh = minrange sinh cosh
-  cosh = minrange cosh sinh
-  asinh = minrange asinh $ \x -> 1/sqrt (x^2+1)
-  acosh = minrange acosh $ \x -> 1/((sqrt (x-1))*(sqrt (x+1)))
-  atanh = minrange atanh $ \x -> 1/(1-x^2)
+  asin = minrange asin (\x -> 1/sqrt (1-x^2)) undefined
+  acos = minrange acos (\x -> -1/sqrt (1-x^2)) undefined
+  atan = minrange atan (\x -> 1/(x^2+1)) undefined
+  sinh = minrange sinh cosh undefined
+  cosh = minrange cosh sinh undefined
+  asinh = minrange asinh (\x -> 1/sqrt (x^2+1)) undefined
+  acosh = minrange acosh (\x -> 1/((sqrt (x-1))*(sqrt (x+1)))) undefined
+  atanh = minrange atanh (\x -> 1/(1-x^2)) undefined
 
 type AFIndex = Int
+
+-- | AFM is a state monad that ensures that any new noise symbols have not been used by any previous affine form.
+-- All affine arithmetic calculations should be done inside the AFM monad. Affine forms do not make sense outside of their monad context.
 type AFM = State AFIndex
 
 -- | This gives an affine form with midpoint 0 and radius 1.
@@ -99,36 +104,21 @@ newFromInterval i = do
 radius :: (Num a) => AF a -> a
 radius (AF _ xs xe) = xe + (sum $ abs <$> xs)
 
-evalRadius :: (Num a) => AFM (AF a) -> a
-evalRadius = evalWith radius
-
 -- | Gives the midpoint of the affine form (the first term of the affine form).
 midpoint :: AF a -> a
 midpoint (AF x _ _) = x
-
-evalMidpoint :: AFM (AF a) -> a
-evalMidpoint = evalWith midpoint
 
 -- | Gives the minimal possible value of the affine form
 lo :: (Num a) => AF a -> a
 lo af = (midpoint af) - (radius af)
 
-evalLo :: (Num a) => AFM (AF a) -> a
-evalLo = evalWith lo
-
 -- | Gives the maximal possible value of the affine form
 hi :: (Num a) => AF a -> a
 hi af = (midpoint af) + (radius af)
 
-evalHi :: (Num a) => AFM (AF a) -> a
-evalHi = evalWith hi
-
 -- | Gives the corresponding interval of the affine form
 interval :: (Num a, Ord a) => AF a -> IA.Interval a
 interval af = (lo af)...(hi af)
-
-evalInterval :: (Num a, Ord a) => AFM (AF a) -> IA.Interval a
-evalInterval = evalWith interval
 
 -- | Returns whether the element is representable by the affine form
 member :: (Num a, Ord a) => a -> AF a -> Bool
@@ -169,7 +159,7 @@ recipAF :: (Ord a, Fractional a) => AF a -> AF a
 recipAF af =
   -- Any way to get rid of the if-else statements?
   if low > 0
-    then minrange recip (\x -> -1/x^2) af
+    then minrange recip (\x -> -1/x^2) undefined af
     else if high < 0
       then negateAF . recipAF $ negateAF af
       else throw DivisionByZero
@@ -184,7 +174,7 @@ cosAF af
         b = hi af `pmod'` (2*pi)
         f x
           -- function never reaches extremum
-          | a < pi && b < pi || a > pi && b > pi = minrange cos (negate . sin) af
+          | a < pi && b < pi || a > pi && b > pi = minrange cos (negate . sin) undefined af
           -- function reaches extremum exactly once
           | a < b = AF (rl - 1) [] rl
           -- function reaches extremum more than once
@@ -221,11 +211,13 @@ fix (AF x xs xe) vals = (m - xe)...(m + xe)
         m  = x + sum prod
 
 -- | Returns a min-range approximation function for given function and its derivative.
-minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> (AF a -> AF a)
-minrange f f' = \af ->
+minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> Curvature -> (AF a -> AF a)
+minrange f f' curv = \af ->
   let a = hi af
       b = lo af
-      p = f' a
+      p = case curv of
+            Convex  -> f' a
+            Concave -> f' b
       q = ((f a)+(f b)-p*(a+b))/2
       d = abs ((f a)-(f b)+p*(a-b))/2
   in

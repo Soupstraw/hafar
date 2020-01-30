@@ -4,10 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 05f6e1686729d69b3f56067c7425b8945c6b9c1532ef02110dfe943fd7ae97a5
+-- hash: 7ccb30c7035a562bbcc0c50fe15ad5686c666ff7fc5121c5d0b8942cd1b33d17
 
 name:           hafar
 version:        0.1.0.0
+synopsis:       Affine arithmetic library for Haskell
 description:    Hafar is an affine arithmetic library for Haskell. Affine arithmetic is an improvement of interval arithmetic.
                 = Examples The following code example shows how subtracting the same value from itself in affine arithmetic results in zero.
                 @ import Numeric.Interval
@@ -15,12 +16,13 @@ description:    Hafar is an affine arithmetic library for Haskell. Affine arithm
                 evalInterval a1 -- Interval (-2) 2
                 a2 = do -- Here we only use a single instance of an affine form x <- newFromInterval $ 1...3 return $ x - x
                 evalInterval a2 -- Interval 0 0 @
+category:       Numeric
 homepage:       https://github.com/Soupstraw/hafar#readme
 bug-reports:    https://github.com/Soupstraw/hafar/issues
 author:         Joosep Jääger
 maintainer:     Joosep Jääger
 copyright:      2020 Joosep Jääger
-license:        BSD3
+license:        GPL
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
