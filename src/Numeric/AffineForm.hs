@@ -72,9 +72,9 @@ instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
   acos = minrange acos (\x -> -1/sqrt (1-x^2)) undefined
   atan = minrange atan (\x -> 1/(x^2+1)) undefined
   sinh = minrange sinh cosh undefined
-  cosh = minrange cosh sinh undefined
+  cosh = minrange cosh sinh Convex
   asinh = minrange asinh (\x -> 1/sqrt (x^2+1)) undefined
-  acosh = minrange acosh (\x -> 1/((sqrt (x-1))*(sqrt (x+1)))) undefined
+  acosh = minrange acosh (\x -> 1/((sqrt (x-1))*(sqrt (x+1)))) Concave
   atanh = minrange atanh (\x -> 1/(1-x^2)) undefined
 
 type AFIndex = Int
@@ -159,7 +159,7 @@ recipAF :: (Ord a, Fractional a) => AF a -> AF a
 recipAF af =
   -- Any way to get rid of the if-else statements?
   if low > 0
-    then minrange recip (\x -> -1/x^2) undefined af
+    then minrange recip (\x -> -1/x^2) Convex af
     else if high < 0
       then negateAF . recipAF $ negateAF af
       else throw DivisionByZero
