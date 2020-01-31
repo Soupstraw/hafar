@@ -54,14 +54,21 @@ instance (Fractional a, Ord a) => Num (AF a) where
   abs = absAF
   signum = signumAF
   fromInteger x = AF (fromInteger x) [] 0
+  -- TODO: singleton (fromInteger x)
   negate = negateAF
 
 instance (Fractional a, Ord a) => Fractional (AF a) where
   recip = recipAF
   fromRational x = AF (fromRational x) [] 0
+  -- TODO: singleton (fromRational x)
 
 instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
-  pi = AF pi [] 0
+  pi = AF pi [] 0 -- TODO "fromIntervalAnonymous" using upper and lower bound on pi
+  -- Prelude> decodeFloat pi
+-- (7074237752028440,-51)
+-- Error term is: encodeFloat 1 $ -51
+-- Type class needed: RealFloat
+
   exp = minrange exp exp Convex
   log x
     | lo x > 0  = minrange log recip Concave x
@@ -83,6 +90,9 @@ type AFIndex = Int
 -- All affine arithmetic calculations should be done inside the AFM monad. Affine forms do not make sense outside of their monad context.
 type AFM = State AFIndex
 
+-- TODO: Currently, AFM has one type parameter, the return value. But it should probably also be parametrized
+--       by the number type. So "type AFM a = State AFIndex"
+
 -- | This gives an affine form with midpoint 0 and radius 1.
 -- This affine form does not share epsilons with any affine forms created before it.
 -- It can be used to instantiate new affine forms.
@@ -99,6 +109,30 @@ newFromInterval i = do
   eps <- newEps
   let mult = ((IA.width i) / 2) .* eps
   return $ (IA.midpoint i) .+ mult
+
+-- TODO
+-- Define function: nextNumber, prevNumber (in type class RealFloat) such that prevNumber x < x < nextNumber x.
+-- Define function: errorBound such that errorBound x >= |x - prevNumber x|, |x - nextNumber x|.
+
+-- TODO:
+-- define type class "ExplicitRounding"
+-- should have nextNumber etc.
+-- instance RealFloat => ExplicitRounding
+
+-- TODO
+-- Not sound because / gives wrong rounding
+-- Better:
+--   (x,y) = high/low point
+--   midpoint = (x+y) / 2
+--   error = max (midpoint - x) (y - midpoint)
+-- Maybe still wrong? Is "-" precise? Probably not in general.
+
+
+-- TODO: define helper functions with clear rounding behavior:
+-- E.g.: plusLow x y = (best) lower bound on x+y
+-- (Some of them with additional assumptions if needed, e.g., "y >= 0")
+-- absHigh, etc.
+
 
 -- | Gives the radius of the affine form
 radius :: (Num a) => AF a -> a
@@ -212,6 +246,8 @@ fix (AF x xs xe) vals = (m - xe)...(m + xe)
 
 -- | Returns a min-range approximation function for given function and its derivative.
 minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> Curvature -> (AF a -> AF a)
+-- TODO: inputs should be (a -> a*a), returning lower/upper bound
+-- TODO: think where you have to use upper/lower rounded values
 minrange f f' curv = \af ->
   let a = hi af
       b = lo af
@@ -227,3 +263,21 @@ minrange f f' curv = \af ->
 evalWith :: (a -> b) -> AFM a -> b
 evalWith f afm = evalState (afm >>= return . f) 0
 
+
+
+-- TODO: other possibility to define plusHighLow:
+-- plusHighLow x y = evalRoundingMonad do setRoundingUp
+--                                        let r1 = x + y
+--                                        setRoundingDown
+--                                        let r2 = x + y
+--                                        return (r1,r2)
+
+myNumber = evalWith id (do x <- singleton 1; y <- exp 1; z <- midpoint y; return z)
+
+data AF t a
+  = AF a [a] a
+  deriving (Show)
+
+type AFM t a = State AFIndex
+
+eval = (\f -> evalState f 0) :: ((forall t. AFM t a r) -> r)
