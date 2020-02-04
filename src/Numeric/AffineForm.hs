@@ -1,5 +1,10 @@
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE RankNTypes#-}
+
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
+                           singleton,
+                           eval,
                            radius,
                            midpoint,
                            lo, hi,
@@ -11,6 +16,7 @@ module Numeric.AffineForm (AFM, AF, newEps,
                           ) where
 
 import Control.Monad.State hiding (fix)
+import Control.Monad.ST
 import Control.Exception (Exception, throw, evaluate, try)
 
 import Numeric.AffineForm.Utils
@@ -23,7 +29,7 @@ import Data.Either (fromLeft, fromRight)
 import Test.QuickCheck
 
 -- | An affine form is defined by its midpoint, list of epsilon coefficients and an error coefficient
-data AF a
+data AF s a
   = AF a [a] a
   deriving (Show)
 
@@ -39,7 +45,7 @@ instance Show AFException where
 
 instance Exception AFException
 
-instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF a) where
+instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF s a) where
   arbitrary = do
                 x <- arbitrary
                 xs <- arbitrary
@@ -48,21 +54,19 @@ instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF a) where
   shrink (AF x xs xe) =
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
 
-instance (Fractional a, Ord a) => Num (AF a) where
+instance (Fractional a, Ord a) => Num (AF s a) where
   (+) = add
   (*) = multiply
   abs = absAF
   signum = signumAF
-  fromInteger x = AF (fromInteger x) [] 0
-  -- TODO: singleton (fromInteger x)
+  fromInteger = singleton . fromInteger
   negate = negateAF
 
-instance (Fractional a, Ord a) => Fractional (AF a) where
+instance (Fractional a, Ord a) => Fractional (AF s a) where
   recip = recipAF
-  fromRational x = AF (fromRational x) [] 0
-  -- TODO: singleton (fromRational x)
+  fromRational = singleton . fromRational
 
-instance (Floating a, RealFrac a, Ord a) => Floating (AF a) where
+instance (Floating a, RealFrac a, Ord a) => Floating (AF s a) where
   pi = AF pi [] 0 -- TODO "fromIntervalAnonymous" using upper and lower bound on pi
   -- Prelude> decodeFloat pi
 -- (7074237752028440,-51)
@@ -88,15 +92,15 @@ type AFIndex = Int
 
 -- | AFM is a state monad that ensures that any new noise symbols have not been used by any previous affine form.
 -- All affine arithmetic calculations should be done inside the AFM monad. Affine forms do not make sense outside of their monad context.
-type AFM = State AFIndex
+type AFM s a = StateT AFIndex (ST s)
 
--- TODO: Currently, AFM has one type parameter, the return value. But it should probably also be parametrized
+-- DONE: Currently, AFM has one type parameter, the return value. But it should probably also be parametrized
 --       by the number type. So "type AFM a = State AFIndex"
 
 -- | This gives an affine form with midpoint 0 and radius 1.
 -- This affine form does not share epsilons with any affine forms created before it.
 -- It can be used to instantiate new affine forms.
-newEps :: Num a => AFM (AF a)
+newEps :: Num a => AFM s a (AF s a)
 newEps = do
   idx <- get
   put $ idx + 1
@@ -104,13 +108,21 @@ newEps = do
 
 -- | Creates a new affine form that covers the interval.
 -- This affine form does not share epsilons with any affine forms created before it.
-newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM (AF a)
+newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM s a (AF s a)
 newFromInterval i = do
   eps <- newEps
   let mult = ((IA.width i) / 2) .* eps
   return $ (IA.midpoint i) .+ mult
 
--- TODO
+-- | Creates a new affine form that represents some exact value
+singleton :: (Num a) => a -> AF s a
+singleton x = AF x [] 0
+
+-- | Evaluates the AFM monad
+eval :: forall a b. (forall s. AFM s a b) -> b
+eval x = runST $ evalStateT x 0
+
+-- TODO:
 -- Define function: nextNumber, prevNumber (in type class RealFloat) such that prevNumber x < x < nextNumber x.
 -- Define function: errorBound such that errorBound x >= |x - prevNumber x|, |x - nextNumber x|.
 
@@ -135,61 +147,61 @@ newFromInterval i = do
 
 
 -- | Gives the radius of the affine form
-radius :: (Num a) => AF a -> a
+radius :: (Num a) => AF s a -> a
 radius (AF _ xs xe) = xe + (sum $ abs <$> xs)
 
 -- | Gives the midpoint of the affine form (the first term of the affine form).
-midpoint :: AF a -> a
+midpoint :: AF s a -> a
 midpoint (AF x _ _) = x
 
 -- | Gives the minimal possible value of the affine form
-lo :: (Num a) => AF a -> a
+lo :: (Num a) => AF s a -> a
 lo af = (midpoint af) - (radius af)
 
 -- | Gives the maximal possible value of the affine form
-hi :: (Num a) => AF a -> a
+hi :: (Num a) => AF s a -> a
 hi af = (midpoint af) + (radius af)
 
 -- | Gives the corresponding interval of the affine form
-interval :: (Num a, Ord a) => AF a -> IA.Interval a
+interval :: (Num a, Ord a) => AF s a -> IA.Interval a
 interval af = (lo af)...(hi af)
 
 -- | Returns whether the element is representable by the affine form
-member :: (Num a, Ord a) => a -> AF a -> Bool
+member :: (Num a, Ord a) => a -> AF s a -> Bool
 member x af = x `IA.member` (interval af)
 
 -- Affine arithmetic operations
 
 -- | Sets the midpoint of the affine form
-setMidpoint :: a -> AF a -> AF a
+setMidpoint :: a -> AF s a -> AF s a
 setMidpoint m (AF x xs xe) = AF m xs xe
 
 -- | Adds the value to the error term of the affine form
-addError :: (Num a) => AF a -> a -> AF a
+addError :: (Num a) => AF s a -> a -> AF s a
 addError (AF x xs xe) e = AF x xs (xe + e)
 
 -- | Adds a scalar value to the affine form
-(.+) :: (Num a) => a -> AF a -> AF a
+(.+) :: (Num a) => a -> AF s a -> AF s a
 a .+ (AF x xs xe) = AF (x+a) xs xe
 
-add :: (Num a) => AF a -> AF a -> AF a
+add :: (Num a) => AF s a -> AF s a -> AF s a
 (AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe+ye)
   where zs = (\(l,r) -> l+r) <$> embed xs ys
 
-negateAF :: (Num a) => AF a -> AF a
+negateAF :: (Num a) => AF s a -> AF s a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
-multiply :: (Num a) => AF a -> AF a -> AF a
+multiply :: (Num a) => AF s a -> AF s a -> AF s a
 (AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze+ze2)
   where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
         ze2 = (abs x*ye) + (abs y*xe)
 
 -- | Multiplies the affine form by a scalar
-(.*) :: (Eq a, Num a) => a -> AF a -> AF a
+(.*) :: (Eq a, Num a) => a -> AF s a -> AF s a
 a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) $ a * xe
 
-recipAF :: (Ord a, Fractional a) => AF a -> AF a
+recipAF :: (Ord a, Fractional a) => AF s a -> AF s a
 recipAF af =
   -- Any way to get rid of the if-else statements?
   if low > 0
@@ -200,7 +212,7 @@ recipAF af =
   where high = hi af
         low  = lo af
 
-cosAF :: (Ord a, RealFrac a, Floating a) => AF a -> AF a
+cosAF :: (Ord a, RealFrac a, Floating a) => AF s a -> AF s a
 cosAF af
   | radius af < pi = f af
   | otherwise = AF 0 [] 1
@@ -216,17 +228,17 @@ cosAF af
           where rl = abs (1 + (max (cos a) (cos b)))/2
                 rh = abs (1 - (min (cos a) (cos b)))/2
 
-sinAF :: (Ord a, RealFrac a, Floating a) => AF a -> AF a
+sinAF :: (Ord a, RealFrac a, Floating a) => AF s a -> AF s a
 sinAF af = cosAF ((-pi/2) .+ af)
 
-absAF :: (Ord a, Fractional a) => AF a -> AF a
+absAF :: (Ord a, Fractional a) => AF s a -> AF s a
 absAF af
   | lo af >= 0 = af
   | hi af <= 0 = -af
   | otherwise = AF x [] x
     where x = (max (abs . hi $ af) (abs . lo $ af))/2
 
-signumAF :: (Ord a, Num a) => AF a -> AF a
+signumAF :: (Ord a, Num a) => AF s a -> AF s a
 signumAF af
   | lo af >= 0 = AF 1 [] 0
   | hi af <= 0 = AF (-1) [] 0
@@ -238,14 +250,14 @@ signumAF af
 
 -- | Fixes the epsilons of the affine form to the values in the list
 -- The list will be extended by zeroes to match the length of the list of coefficients
-fix :: (Num a, Ord a) => AF a -> [a] -> IA.Interval a
+fix :: (Num a, Ord a) => AF s a -> [a] -> IA.Interval a
 fix (AF x xs xe) vals = (m - xe)...(m + xe)
   where em = embed xs vals
         prod = uncurry (*) <$> em
         m  = x + sum prod
 
 -- | Returns a min-range approximation function for given function and its derivative.
-minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> Curvature -> (AF a -> AF a)
+minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> Curvature -> (AF s a -> AF s a)
 -- TODO: inputs should be (a -> a*a), returning lower/upper bound
 -- TODO: think where you have to use upper/lower rounded values
 minrange f f' curv = \af ->
@@ -259,12 +271,6 @@ minrange f f' curv = \af ->
   in
   q .+ (p .* af) `addError` d
 
--- | Evaluates the monad after applying a function
-evalWith :: (a -> b) -> AFM a -> b
-evalWith f afm = evalState (afm >>= return . f) 0
-
-
-
 -- TODO: other possibility to define plusHighLow:
 -- plusHighLow x y = evalRoundingMonad do setRoundingUp
 --                                        let r1 = x + y
@@ -272,12 +278,12 @@ evalWith f afm = evalState (afm >>= return . f) 0
 --                                        let r2 = x + y
 --                                        return (r1,r2)
 
-myNumber = evalWith id (do x <- singleton 1; y <- exp 1; z <- midpoint y; return z)
+-- myNumber = evalWith id (do x <- singleton 1; y <- exp 1; z <- midpoint y; return z)
 
-data AF t a
-  = AF a [a] a
-  deriving (Show)
+-- data AF t a
+--   = AF s a [a] a
+--   deriving (Show)
 
-type AFM t a = State AFIndex
+-- type AFM t a = State AFIndex
 
-eval = (\f -> evalState f 0) :: ((forall t. AFM t a r) -> r)
+-- eval = (\f -> evalState f 0) :: ((forall t. AFM t a r) -> r)
