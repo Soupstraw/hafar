@@ -32,8 +32,13 @@ clamp x a b = min (max a x) b
 
 -- Rounding
 
-class ExplicitRounding a where
+class (Ord a, Num a) => ExplicitRounding a where
   epsilon :: a -> a
+  interval :: a -> IA.Interval a
+
+  -- Epsilon should be defined so that `interval x` would contain all the values that
+  -- could be set equal to x due to rounding errors
+  interval x = (x - epsilon x)IA....(x + epsilon x)
 
 instance ExplicitRounding Int where
   epsilon _ = 0

@@ -216,22 +216,24 @@ a .+ (AF x xs xe) = AF m xs (xe+epsilon m)
   where m = x + a
 
 add :: (ExplicitRounding a, Num a, Ord a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe + ye + ee)
+(AF x xs xe) `add` (AF y ys ye) = addError af (epsilon $ radius af)
   where zs = (\(l,r) -> l+r) <$> embed xs ys
-        ee = max (epsilon xe) (epsilon ye)
+        af = AF (x+y) zs (xe + ye)
 
 negateAF :: (Num a) => AF s a -> AF s a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
 multiply :: (Num a, Ord a, ExplicitRounding a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze1+ze2+max (epsilon ze1) (epsilon ze2))
+(AF x xs xe) `multiply` (AF y ys ye) = addError af (epsilon $ radius af)
   where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze1 = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
         ze2 = (abs x*ye) + (abs y*xe)
+        af = AF (x*y) zs (ze1+ze2)
 
 -- | Multiplies the affine form by a scalar
-(.*) :: (Eq a, Num a) => a -> AF s a -> AF s a
-a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) $ (a * xe)
+(.*) :: (Eq a, Num a, Ord a, ExplicitRounding a) => a -> AF s a -> AF s a
+a .* (AF x xs xe) = addError af (epsilon $ radius af)
+  where af = AF (a*x) ((a*) <$> xs) $ (a * xe)
 
 recipAF :: (Ord a, Fractional a, ExplicitRounding a) => AF s a -> AF s a
 recipAF af =
@@ -302,8 +304,9 @@ minrange f f' curv = \af ->
             Concave -> f' b
       q = ((f a)+(f b)-p*(a+b))/2
       d = abs ((f a)-(f b)+p*(a-b))/2
+      af1 = q .+ (p .* af) `addError` (d)
   in
-  q .+ (p .* af) `addError` (d+epsilon d)
+    addError af1 $ epsilon (radius af1)
 
 -- TODO: other possibility to define plusHighLow:
 -- plusHighLow x y = evalRoundingMonad do setRoundingUp
