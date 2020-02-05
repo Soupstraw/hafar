@@ -3,6 +3,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DataKinds, ScopedTypeVariables #-}
 
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
@@ -15,6 +16,7 @@ module Numeric.AffineForm (AFM, AF, newEps,
                            member,
                            setMidpoint,
                            fix,
+                           addError,
                            (.+), (.*)
                           ) where
 
@@ -25,6 +27,7 @@ import Control.Exception (Exception, throw, evaluate, try)
 import Numeric.AffineForm.Utils
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
+import Numeric.Rounded
 import Data.Fixed (mod')
 import Data.Ratio (approxRational, (%))
 import Data.Either (fromLeft, fromRight)
@@ -41,10 +44,12 @@ data Curvature = Convex | Concave
 data AFException
   = DivisionByZero
   | LogFromNegative
+  | AddingNegativeError
 
 instance Show AFException where
   show DivisionByZero = "division by zero"
   show LogFromNegative = "logarithm from a negative number"
+  show AddingNegativeError = "cannot add a negative error to an affine form"
 
 instance Exception AFException
 
@@ -57,7 +62,7 @@ instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF s a) where
   shrink (AF x xs xe) =
     [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
 
-instance (Fractional a, Ord a) => Num (AF s a) where
+instance (Fractional a, ExplicitRounding a, Ord a) => Num (AF s a) where
   (+) = add
   (*) = multiply
   abs = absAF
@@ -65,17 +70,12 @@ instance (Fractional a, Ord a) => Num (AF s a) where
   fromInteger = singleton . fromInteger
   negate = negateAF
 
-instance (Fractional a, Ord a) => Fractional (AF s a) where
+instance (Fractional a, ExplicitRounding a, Ord a) => Fractional (AF s a) where
   recip = recipAF
   fromRational = singleton . fromRational
 
-instance (Floating a, RealFrac a, Ord a) => Floating (AF s a) where
-  pi = AF pi [] 0 -- TODO "fromIntervalAnonymous" using upper and lower bound on pi
-  -- Prelude> decodeFloat pi
--- (7074237752028440,-51)
--- Error term is: encodeFloat 1 $ -51
--- Type class needed: RealFloat
-
+instance (Floating a, RealFrac a, ExplicitRounding a, Ord a) => Floating (AF s a) where
+  pi = approxSingleton pi
   exp = minrange exp exp Convex
   log x
     | lo x > 0  = minrange log recip Concave x
@@ -119,9 +119,6 @@ instance (Monad m) => MonadState s (AFMT t s m) where
 instance MonadTrans (AFMT t s) where
   lift c = AFMT $ \s -> c >>= (\x -> return (x, s))
 
--- DONE: Currently, AFM has one type parameter, the return value. But it should probably also be parametrized
---       by the number type. So "type AFM a = State AFIndex"
-
 -- | This gives an affine form with midpoint 0 and radius 1.
 -- This affine form does not share epsilons with any affine forms created before it.
 -- It can be used to instantiate new affine forms.
@@ -133,7 +130,7 @@ newEps = do
 
 -- | Creates a new affine form that covers the interval.
 -- This affine form does not share epsilons with any affine forms created before it.
-newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM t (AF t a)
+newFromInterval :: (Eq a, Fractional a, ExplicitRounding a) => IA.Interval a -> AFM t (AF t a)
 newFromInterval i = do
   eps <- newEps
   let mult = ((IA.width i) / 2) .* eps
@@ -143,7 +140,10 @@ newFromInterval i = do
 singleton :: (Num a) => a -> AF s a
 singleton x = AF x [] 0
 
--- | Evaluates the AFM monad
+approxSingleton :: (ExplicitRounding a) => a -> AF s a
+approxSingleton x = AF x [] $ epsilon x
+
+-- | Evaluates the AFM monad. It is not possible to get an AF out of an AFM monad.
 evalAFM :: forall a b. (forall t. AFM t b) -> b
 evalAFM (AFMT x) = fst . runIdentity $ x 0
 
@@ -172,61 +172,68 @@ evalAFM (AFMT x) = fst . runIdentity $ x 0
 
 
 -- | Gives the radius of the affine form
-radius :: (Num a) => AF s a -> a
-radius (AF _ xs xe) = xe + (sum $ abs <$> xs)
+radius :: (Num a, ExplicitRounding a) => AF s a -> a
+radius (AF _ xs xe) = v + epsilon v
+  where v = xe + (sum $ abs <$> xs)
 
 -- | Gives the midpoint of the affine form (the first term of the affine form).
 midpoint :: AF s a -> a
 midpoint (AF x _ _) = x
 
 -- | Gives the minimal possible value of the affine form
-lo :: (Num a) => AF s a -> a
-lo af = (midpoint af) - (radius af)
+lo :: (Num a, ExplicitRounding a) => AF s a -> a
+lo af = x - epsilon x
+  where x = (midpoint af) - (radius af)
 
 -- | Gives the maximal possible value of the affine form
-hi :: (Num a) => AF s a -> a
-hi af = (midpoint af) + (radius af)
+hi :: (Num a, ExplicitRounding a) => AF s a -> a
+hi af = x + epsilon x
+  where x = (midpoint af) + (radius af)
 
 -- | Gives the corresponding interval of the affine form
-interval :: (Num a, Ord a) => AF s a -> IA.Interval a
+interval :: (Num a, Ord a, ExplicitRounding a) => AF s a -> IA.Interval a
 interval af = (lo af)...(hi af)
 
 -- | Returns whether the element is representable by the affine form
-member :: (Num a, Ord a) => a -> AF s a -> Bool
+member :: (Num a, Ord a, ExplicitRounding a) => a -> AF s a -> Bool
 member x af = x `IA.member` (interval af)
 
 -- Affine arithmetic operations
 
 -- | Sets the midpoint of the affine form
-setMidpoint :: a -> AF s a -> AF s a
-setMidpoint m (AF x xs xe) = AF m xs xe
+setMidpoint :: (Num a, ExplicitRounding a) => a -> AF s a -> AF s a
+setMidpoint m (AF x xs xe) = AF m xs (xe+epsilon m)
 
 -- | Adds the value to the error term of the affine form
-addError :: (Num a) => AF s a -> a -> AF s a
-addError (AF x xs xe) e = AF x xs (xe + e)
+addError :: (Num a, Ord a) => AF s a -> a -> AF s a
+addError (AF x xs xe) e
+  | e >= 0 = AF x xs (xe + e)
+  | otherwise = throw AddingNegativeError
 
 -- | Adds a scalar value to the affine form
-(.+) :: (Num a) => a -> AF s a -> AF s a
-a .+ (AF x xs xe) = AF (x+a) xs xe
+(.+) :: (Num a, ExplicitRounding a) => a -> AF s a -> AF s a
+a .+ (AF x xs xe) = AF m xs (xe+epsilon m)
+  where m = x + a
 
-add :: (Num a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe+ye)
+add :: (ExplicitRounding a, Num a, Ord a) => AF s a -> AF s a -> AF s a
+(AF x xs xe) `add` (AF y ys ye) = AF (x+y) zs (xe + ye + ee)
   where zs = (\(l,r) -> l+r) <$> embed xs ys
+        ee = max (epsilon xe) (epsilon ye)
 
 negateAF :: (Num a) => AF s a -> AF s a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
-multiply :: (Num a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze+ze2)
+multiply :: (Num a, Ord a, ExplicitRounding a) => AF s a -> AF s a -> AF s a
+(AF x xs xe) `multiply` (AF y ys ye) = AF (x*y) zs (ze1+ze2+max (epsilon ze1) (epsilon ze2))
   where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
-        ze = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
+        ze1 = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
         ze2 = (abs x*ye) + (abs y*xe)
 
 -- | Multiplies the affine form by a scalar
 (.*) :: (Eq a, Num a) => a -> AF s a -> AF s a
-a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) $ a * xe
+a .* (AF x xs xe) = AF (a*x) ((a*) <$> xs) $ (a * xe)
 
-recipAF :: (Ord a, Fractional a) => AF s a -> AF s a
+recipAF :: (Ord a, Fractional a, ExplicitRounding a) => AF s a -> AF s a
 recipAF af =
   -- Any way to get rid of the if-else statements?
   if low > 0
@@ -237,7 +244,7 @@ recipAF af =
   where high = hi af
         low  = lo af
 
-cosAF :: (Ord a, RealFrac a, Floating a) => AF s a -> AF s a
+cosAF :: (Ord a, RealFrac a, Floating a, ExplicitRounding a) => AF s a -> AF s a
 cosAF af
   | radius af < pi = f af
   | otherwise = AF 0 [] 1
@@ -253,17 +260,17 @@ cosAF af
           where rl = abs (1 + (max (cos a) (cos b)))/2
                 rh = abs (1 - (min (cos a) (cos b)))/2
 
-sinAF :: (Ord a, RealFrac a, Floating a) => AF s a -> AF s a
+sinAF :: (Ord a, RealFrac a, Floating a, ExplicitRounding a) => AF s a -> AF s a
 sinAF af = cosAF ((-pi/2) .+ af)
 
-absAF :: (Ord a, Fractional a) => AF s a -> AF s a
+absAF :: (Ord a, ExplicitRounding a, Fractional a) => AF s a -> AF s a
 absAF af
   | lo af >= 0 = af
   | hi af <= 0 = -af
   | otherwise = AF x [] x
     where x = (max (abs . hi $ af) (abs . lo $ af))/2
 
-signumAF :: (Ord a, Num a) => AF s a -> AF s a
+signumAF :: (Ord a, Num a, ExplicitRounding a) => AF s a -> AF s a
 signumAF af
   | lo af >= 0 = AF 1 [] 0
   | hi af <= 0 = AF (-1) [] 0
@@ -275,14 +282,16 @@ signumAF af
 
 -- | Fixes the epsilons of the affine form to the values in the list
 -- The list will be extended by zeroes to match the length of the list of coefficients
-fix :: (Num a, Ord a) => AF s a -> [a] -> IA.Interval a
-fix (AF x xs xe) vals = (m - xe)...(m + xe)
+fix :: (Num a, Ord a, ExplicitRounding a) => AF s a -> [a] -> IA.Interval a
+fix (AF x xs xe) vals = (l - epsilon l)...(h + epsilon h)
   where em = embed xs vals
-        prod = uncurry (*) <$> em
-        m  = x + sum prod
+        s = sum $ uncurry (*) <$> em
+        m = x + s
+        l = m - xe
+        h = m + xe
 
 -- | Returns a min-range approximation function for given function and its derivative.
-minrange :: (Fractional a, Ord a) => (a -> a) -> (a -> a) -> Curvature -> (AF s a -> AF s a)
+minrange :: (Fractional a, Ord a, ExplicitRounding a) => (a -> a) -> (a -> a) -> Curvature -> (AF s a -> AF s a)
 -- TODO: inputs should be (a -> a*a), returning lower/upper bound
 -- TODO: think where you have to use upper/lower rounded values
 minrange f f' curv = \af ->
@@ -294,7 +303,7 @@ minrange f f' curv = \af ->
       q = ((f a)+(f b)-p*(a+b))/2
       d = abs ((f a)-(f b)+p*(a-b))/2
   in
-  q .+ (p .* af) `addError` d
+  q .+ (p .* af) `addError` (d+epsilon d)
 
 -- TODO: other possibility to define plusHighLow:
 -- plusHighLow x y = evalRoundingMonad do setRoundingUp
@@ -302,13 +311,3 @@ minrange f f' curv = \af ->
 --                                        setRoundingDown
 --                                        let r2 = x + y
 --                                        return (r1,r2)
-
--- myNumber = evalWith id (do x <- singleton 1; y <- exp 1; z <- midpoint y; return z)
-
--- data AF t a
---   = AF s a [a] a
---   deriving (Show)
-
--- type AFM t a = State AFIndex
-
--- eval = (\f -> evalState f 0) :: ((forall t. AFM t a r) -> r)

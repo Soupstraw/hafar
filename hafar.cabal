@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7ccb30c7035a562bbcc0c50fe15ad5686c666ff7fc5121c5d0b8942cd1b33d17
+-- hash: edd3aada61c1edffc23efe5da95dcedab24bfbc3b68366eca6f9757c6fb99631
 
 name:           hafar
 version:        0.1.0.0
@@ -47,6 +47,7 @@ library
     , intervals >=0.8 && <1
     , mtl >=2.2 && <3
     , random >=1.1 && <2
+    , rounded >=1.0 && <2
   default-language: Haskell2010
 
 test-suite hafar-test
@@ -64,4 +65,5 @@ test-suite hafar-test
     , intervals >=0.8 && <1
     , mtl >=2.2 && <3
     , random >=1.1 && <2
+    , rounded >=1.0 && <2
   default-language: Haskell2010

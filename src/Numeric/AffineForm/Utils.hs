@@ -1,8 +1,20 @@
-module Numeric.AffineForm.Utils where
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DataKinds #-}
+
+module Numeric.AffineForm.Utils (
+                                embed,
+                                pmod', clamp,
+                                epsilon,
+                                ExplicitRounding
+                                ) where
 
 import qualified Numeric.Interval as IA
-
+import Numeric.Rounded
+import Data.Ratio
 import Data.Fixed
+import Data.Proxy
+import GHC.Float hiding (clamp)
 
 embed :: (Num a, Num b) => [a] -> [b] -> [(a,b)]
 embed x y = take (max (length x) (length y)) $ zip infx infy
@@ -17,3 +29,19 @@ pmod' a b
 
 clamp :: (Ord a) => a -> a -> a -> a
 clamp x a b = min (max a x) b
+
+-- Rounding
+
+class ExplicitRounding a where
+  epsilon :: a -> a
+
+instance ExplicitRounding Int where
+  epsilon _ = 0
+
+instance ExplicitRounding Float where
+  epsilon 0 = epsilon $ 1e-36
+  epsilon x = encodeFloat 1 (snd $ decodeFloat x)
+
+instance ExplicitRounding Double where
+  epsilon 0 = epsilon $ 1e-300
+  epsilon x = encodeFloat 1 (snd $ decodeFloat x)

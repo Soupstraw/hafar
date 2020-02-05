@@ -52,6 +52,7 @@ dependencies:
 - QuickCheck >= 2.13 && < 3
 - random >= 1.1 && < 2
 - mtl >= 2.2 && < 3
+- rounded >= 1.0 && < 2
 
 library:
   source-dirs: src

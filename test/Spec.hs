@@ -8,15 +8,13 @@ import System.Random
 import Text.Printf
 import Data.Fixed (mod')
 
-import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate, Interval)
+import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate, Interval, midpoint)
 import Numeric.AffineForm
 import Numeric.AffineForm.Utils
 
 --
 -- Generators and modifiers
 --
-
-data Approx a = Approx a (AF a)
 
 data EpsV a = EpsV [a]
   deriving (Show)
@@ -35,10 +33,12 @@ instance (Enum a, Num a, Arbitrary a) => Arbitrary (SmallExponent a) where
   arbitrary = SmallExponent <$> elements [1..4]
   shrink (SmallExponent x) = SmallExponent <$> shrink x
 
-newtype ZerolessAF a = ZerolessAF (AF a)
-  deriving (Show)
+newtype ZerolessAF s a = ZerolessAF (AF s a)
 
-instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (ZerolessAF a) where
+instance (Show a) => Show (ZerolessAF s a) where
+  show (ZerolessAF x) = show x
+
+instance (Fractional a, Ord a, Arbitrary a, ExplicitRounding a) => Arbitrary (ZerolessAF s a) where
   arbitrary = do
     af <- arbitrary
     let mh = max (midpoint af) (1 + radius af)
@@ -48,19 +48,23 @@ instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (ZerolessAF a) where
           | otherwise = ZerolessAF $ setMidpoint ml af
     return res
 
-newtype PositiveAF a = PositiveAF (AF a)
-  deriving (Show)
+newtype PositiveAF s a = PositiveAF (AF s a)
 
-instance (Fractional a, Ord a, Arbitrary a) => Arbitrary (PositiveAF a) where
+instance (Show a) => Show (PositiveAF s a) where
+  show (PositiveAF x) = show x
+
+instance (Fractional a, Ord a, Arbitrary a, ExplicitRounding a) => Arbitrary (PositiveAF s a) where
   arbitrary = do
     af <- arbitrary
     let m = 1/100000 + max (midpoint af) (radius af)
     return . PositiveAF $ setMidpoint m af
 
-newtype SmallAF a = SmallAF (AF a)
-  deriving (Show)
+newtype SmallAF s a = SmallAF (AF s a)
 
-instance (Floating a, Ord a, Arbitrary a) => Arbitrary (SmallAF a) where
+instance (Show a) => Show (SmallAF s a) where
+  show (SmallAF x) = show x
+
+instance (Floating a, Ord a, Arbitrary a, ExplicitRounding a) => Arbitrary (SmallAF s a) where
   arbitrary = do
     size <- getSize
     af <- arbitrary
@@ -68,18 +72,6 @@ instance (Floating a, Ord a, Arbitrary a) => Arbitrary (SmallAF a) where
         k = s / (radius af)
         m = clamp (midpoint af) (-s) s
     return . SmallAF $ setMidpoint m (k .* af)
-
-instance (Ord a, Num a, Arbitrary a, Random a) => Arbitrary (Approx a) where
-  arbitrary = do
-    af <- arbitrary
-    let i = interval af
-    x <- choose (IA.inf i, IA.sup i)
-    return $ Approx x af
-  shrink (Approx x af) = filter valid [Approx x' af' | (x', af') <- shrink (x, af)]
-
-valid :: (Ord a, Num a) => Approx a -> Bool
-valid (Approx x af) = x `IA.member` i
-  where i = interval af
 
 validEV :: (Ord a, Num a) => EpsV a -> Bool
 validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
@@ -90,65 +82,63 @@ validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
 
 -- Generalized
 
-correctnessPropUnary :: (Num a, Ord a, Show a) =>
-  (AF a -> AF a) ->
-  (IA.Interval a -> IA.Interval a) ->
+correctnessPropUnary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
+  (AF s a -> AF s a) ->
+  (a -> a) ->
   [a] ->
-  AF a ->
+  AF s a ->
   Property
-
 correctnessPropUnary f g e x = counterexample str res
   where lhs = (f x) `fix` e
-        rhs = g (x `fix` e)
-        res = lhs `IA.contains` rhs
+        rhs = g (IA.midpoint $ fix x e)
+        res = rhs `IA.member` lhs
         str = "AA: " ++ (show lhs) ++ "\n"
            ++ "IA: " ++ (show rhs)
 
-correctnessPropBinary :: (Num a, Ord a, Show a) =>
-  (AF a -> AF a -> AF a) ->
-  (IA.Interval a -> IA.Interval a -> IA.Interval a) ->
+correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
+  (AF s a -> AF s a -> AF s a) ->
+  (a -> a -> a) ->
   [a] ->
-  AF a ->
-  AF a ->
+  AF s a ->
+  AF s a ->
   Property
-
 correctnessPropBinary f g e x y = counterexample str res
   where lhs = (f x y) `fix` e
-        rhs = g (x `fix` e) (y `fix` e)
-        res = lhs `IA.contains` rhs
+        rhs = g (IA.midpoint $ fix x e) (IA.midpoint $ fix y e)
+        res = rhs `IA.member` lhs
         str = "AA: " ++ (show lhs) ++ "\n"
            ++ "IA: " ++ (show rhs)
 
 -- RuKaS14.pdf [1102:2]
--- prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
+-- prop_addition :: EpsV Double -> AF Double -> AF Double -> Property
 -- prop_addition (EpsV e) x y = counterexample str res
 --   where lhs = (x + y) `fix` e
 --         rhs = x `fix` e + y `fix` e
 --         res = lhs `IA.contains` rhs
 --         str = "AA: " ++ (show lhs) ++ "\nIA: " ++ (show rhs)
 
-prop_addition :: EpsV Rational -> AF Rational -> AF Rational -> Property
+prop_addition :: EpsV Double -> AF s Double -> AF s Double -> Property
 prop_addition (EpsV e) x y = correctnessPropBinary (+) (+) e x y
 
-prop_subtraction :: EpsV Rational -> AF Rational -> AF Rational -> Property
+prop_subtraction :: EpsV Double -> AF s Double -> AF s Double -> Property
 prop_subtraction (EpsV e) x y = correctnessPropBinary (-) (-) e x y
 
-prop_multiplication :: EpsV Rational -> AF Rational -> AF Rational -> Property
+prop_multiplication :: EpsV Double -> AF s Double -> AF s Double -> Property
 prop_multiplication (EpsV e) x y = correctnessPropBinary (*) (*) e x y
 
-prop_power :: EpsV Rational -> AF Rational -> SmallExponent Integer -> Property
+prop_power :: EpsV Double -> AF s Double -> SmallExponent Integer -> Property
 prop_power (EpsV e) x (SmallExponent n) = correctnessPropUnary (^n) (^n) e x
 
-prop_recip :: EpsV Rational -> ZerolessAF Rational -> Property
+prop_recip :: EpsV Double -> ZerolessAF s Double -> Property
 prop_recip (EpsV e) (ZerolessAF x) = correctnessPropUnary recip recip e x
 
-prop_log :: EpsV Double -> PositiveAF Double -> Property
+prop_log :: EpsV Double -> PositiveAF s Double -> Property
 prop_log (EpsV e) (PositiveAF x) = correctnessPropUnary log log e x
 
-prop_exp :: EpsV Double -> SmallAF Double -> Property
+prop_exp :: EpsV Double -> SmallAF s Double -> Property
 prop_exp (EpsV e) (SmallAF x) = correctnessPropUnary exp exp e x
 
-prop_abs :: EpsV Double -> AF Double -> Property
+prop_abs :: EpsV Double -> AF s Double -> Property
 prop_abs (EpsV e) x = correctnessPropUnary abs abs e x
 
 --
