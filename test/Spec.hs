@@ -88,7 +88,7 @@ correctnessPropUnary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
   [a] ->
   AF s a ->
   Property
-correctnessPropUnary f g e x = counterexample str res
+correctnessPropUnary f g e x = withMaxSuccess 5000 $ counterexample str res
   where lhs = (f x) `fix` e
         rhs = g (IA.midpoint $ fix x e)
         res = rhs `IA.member` lhs
@@ -102,7 +102,7 @@ correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
   AF s a ->
   AF s a ->
   Property
-correctnessPropBinary f g e x y = counterexample str res
+correctnessPropBinary f g e x y = withMaxSuccess 5000 $ counterexample str res
   where lhs = (f x y) `fix` e
         rhs = g (IA.midpoint $ fix x e) (IA.midpoint $ fix y e)
         res = rhs `IA.member` lhs
