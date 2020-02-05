@@ -1,10 +1,13 @@
-{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes#-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
                            singleton,
-                           eval,
+                           evalAFM,
                            radius,
                            midpoint,
                            lo, hi,
@@ -16,7 +19,7 @@ module Numeric.AffineForm (AFM, AF, newEps,
                           ) where
 
 import Control.Monad.State hiding (fix)
-import Control.Monad.ST
+import Control.Monad.Identity hiding (fix)
 import Control.Exception (Exception, throw, evaluate, try)
 
 import Numeric.AffineForm.Utils
@@ -92,7 +95,29 @@ type AFIndex = Int
 
 -- | AFM is a state monad that ensures that any new noise symbols have not been used by any previous affine form.
 -- All affine arithmetic calculations should be done inside the AFM monad. Affine forms do not make sense outside of their monad context.
-type AFM s a = StateT AFIndex (ST s)
+newtype AFMT t s m a = AFMT {runAFMT :: s -> m (a, s)}
+type AFM t a = AFMT t AFIndex Identity a
+
+instance (Monad m) => Functor (AFMT t s m) where
+  fmap = liftM
+
+instance (Monad m) => Applicative (AFMT t s m) where
+  pure = return
+  (<*>) = ap
+
+instance (Monad m) => Monad (AFMT t s m) where
+  return a = AFMT $ \s -> return (a, s)
+  (AFMT x) >>= f = AFMT $ \s -> do
+    (v, s') <- x s
+    (AFMT x') <- return $ f v
+    x' s'
+
+instance (Monad m) => MonadState s (AFMT t s m) where
+  get   = AFMT $ \s -> return (s, s)
+  put s = AFMT $ \_ -> return ((), s)
+
+instance MonadTrans (AFMT t s) where
+  lift c = AFMT $ \s -> c >>= (\x -> return (x, s))
 
 -- DONE: Currently, AFM has one type parameter, the return value. But it should probably also be parametrized
 --       by the number type. So "type AFM a = State AFIndex"
@@ -100,7 +125,7 @@ type AFM s a = StateT AFIndex (ST s)
 -- | This gives an affine form with midpoint 0 and radius 1.
 -- This affine form does not share epsilons with any affine forms created before it.
 -- It can be used to instantiate new affine forms.
-newEps :: Num a => AFM s a (AF s a)
+newEps :: Num a => AFM t (AF t a)
 newEps = do
   idx <- get
   put $ idx + 1
@@ -108,7 +133,7 @@ newEps = do
 
 -- | Creates a new affine form that covers the interval.
 -- This affine form does not share epsilons with any affine forms created before it.
-newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM s a (AF s a)
+newFromInterval :: (Eq a, Fractional a) => IA.Interval a -> AFM t (AF t a)
 newFromInterval i = do
   eps <- newEps
   let mult = ((IA.width i) / 2) .* eps
@@ -119,8 +144,8 @@ singleton :: (Num a) => a -> AF s a
 singleton x = AF x [] 0
 
 -- | Evaluates the AFM monad
-eval :: forall a b. (forall s. AFM s a b) -> b
-eval x = runST $ evalStateT x 0
+evalAFM :: forall a b. (forall t. AFM t b) -> b
+evalAFM (AFMT x) = fst . runIdentity $ x 0
 
 -- TODO:
 -- Define function: nextNumber, prevNumber (in type class RealFloat) such that prevNumber x < x < nextNumber x.
