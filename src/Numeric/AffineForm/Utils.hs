@@ -51,7 +51,7 @@ class (Ord a, Num a) => ExplicitRounding a where
   (*\) :: a -> a -> a
 
   -- Epsilon should be defined so that `interval x` would contain all the values that
-  -- could be set equal to x due to rounding errors
+  -- could be equal to x due to rounding errors
   prev x     = x - eps x
   next x     = x + eps x
   interval x = (prev x)IA....(next x)
