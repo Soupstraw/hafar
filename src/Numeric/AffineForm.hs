@@ -11,7 +11,7 @@ module Numeric.AffineForm (AFM, AF, newEps,
                            evalAFM,
                            radius,
                            midpoint,
-                           lo, hi,
+                           inf, sup,
                            interval,
                            member,
                            epscount_,
@@ -79,7 +79,7 @@ instance (Floating a, RealFrac a, ExplicitRounding a, Ord a) => Floating (AF s a
   pi = approxSingleton pi
   exp = minrange exp exp Convex
   log x
-    | lo x > 0  = minrange log recip Concave x
+    | inf x > 0  = minrange log recip Concave x
     | otherwise = throw LogFromNegative
   sin = sinAF
   cos = cosAF
@@ -160,18 +160,18 @@ midpoint :: AF s a -> a
 midpoint (AF x _ _) = x
 
 -- | Gives the minimal possible value of the affine form
-lo :: (Num a, ExplicitRounding a) => AF s a -> a
-lo af = x - eps x
+inf :: (Num a, ExplicitRounding a) => AF s a -> a
+inf af = x - eps x
   where x = (midpoint af) - (radius af)
 
 -- | Gives the maximal possible value of the affine form
-hi :: (Num a, ExplicitRounding a) => AF s a -> a
-hi af = x + eps x
+sup :: (Num a, ExplicitRounding a) => AF s a -> a
+sup af = x + eps x
   where x = (midpoint af) + (radius af)
 
 -- | Gives the corresponding interval of the affine form
 interval :: (Num a, Ord a, ExplicitRounding a) => AF s a -> IA.Interval a
-interval af = (lo af)...(hi af)
+interval af = (inf af)...(sup af)
 
 -- | Returns whether the element is representable by the affine form
 member :: (Num a, Ord a, ExplicitRounding a) => a -> AF s a -> Bool
@@ -227,15 +227,15 @@ recipAF af
   | low > 0   = minrange recip (\x -> -1/x^2) Convex af
   | high < 0  = negateAF . recipAF $ negateAF af
   | otherwise = throw DivisionByZero
-  where high = hi af
-        low  = lo af
+  where high = sup af
+        low  = inf af
 
 cosAF :: (Ord a, RealFrac a, Floating a, ExplicitRounding a) => AF s a -> AF s a
 cosAF af
   | radius af < pi = f af
   | otherwise = AF 0 [] 1
-  where a = lo af `pmod'` (2*pi)
-        b = hi af `pmod'` (2*pi)
+  where a = inf af `pmod'` (2*pi)
+        b = sup af `pmod'` (2*pi)
         f x
           -- function never reaches extremum
           | a < pi && b < pi || a > pi && b > pi = minrange cos (negate . sin) undefined af
@@ -251,15 +251,15 @@ sinAF af = cosAF ((-pi/2) .+ af)
 
 absAF :: (Ord a, ExplicitRounding a, Fractional a) => AF s a -> AF s a
 absAF af
-  | lo af >= 0 = af
-  | hi af <= 0 = -af
+  | inf af >= 0 = af
+  | sup af <= 0 = -af
   | otherwise = AF x [] x
-    where x = (max (abs . hi $ af) (abs . lo $ af))/2
+    where x = (max (abs . sup $ af) (abs . inf $ af))/2
 
 signumAF :: (Ord a, Num a, ExplicitRounding a) => AF s a -> AF s a
 signumAF af
-  | lo af >= 0 = AF 1 [] 0
-  | hi af <= 0 = AF (-1) [] 0
+  | inf af >= 0 = AF 1 [] 0
+  | sup af <= 0 = AF (-1) [] 0
   | otherwise = AF 0 [] 1
 
 --
@@ -279,8 +279,8 @@ fix (AF x xs xe) vals = (l)...(h)
 -- | Returns a min-range approximation function for given function and its derivative.
 minrange :: (Fractional a, Ord a, ExplicitRounding a) => (a -> a) -> (a -> a) -> Curvature -> (AF s a -> AF s a)
 minrange f f' curv = \af ->
-  let a   = hi af
-      b   = lo af
+  let a   = sup af
+      b   = inf af
       p   = case curv of
               Convex  -> f' a
               Concave -> f' b
