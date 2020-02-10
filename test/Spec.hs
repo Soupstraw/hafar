@@ -162,6 +162,12 @@ prop_exp (EpsV e) (SmallAF x) = correctnessPropUnary exp exp e x
 prop_abs :: EpsV Double -> AF s Double -> Property
 prop_abs (EpsV e) x = correctnessPropUnary abs abs e x
 
+-- prop_sin :: EpsV Double -> AF s Double -> Property
+-- prop_sin (EpsV e) x = correctnessPropUnary sin sin e x
+
+-- prop_cos :: EpsV Double -> AF s Double -> Property
+-- prop_cos (EpsV e) x = correctnessPropUnary cos cos e x
+
 --
 -- Testing boilerplate
 --
