@@ -140,40 +140,18 @@ newFromInterval i = do
 singleton :: (Num a) => a -> AF s a
 singleton x = AF x [] 0
 
+-- | Creates a new affine form that approximately represents some value.
+-- This function adds a small error to account for the 'wobble' in the computer representation of the value.
 approxSingleton :: (ExplicitRounding a) => a -> AF s a
-approxSingleton x = AF x [] $ epsilon x
+approxSingleton x = AF x [] $ eps x
 
 -- | Evaluates the AFM monad. It is not possible to get an AF out of an AFM monad.
 evalAFM :: forall a b. (forall t. AFM t b) -> b
 evalAFM (AFMT x) = fst . runIdentity $ x 0
 
--- TODO:
--- Define function: nextNumber, prevNumber (in type class RealFloat) such that prevNumber x < x < nextNumber x.
--- Define function: errorBound such that errorBound x >= |x - prevNumber x|, |x - nextNumber x|.
-
--- TODO:
--- define type class "ExplicitRounding"
--- should have nextNumber etc.
--- instance RealFloat => ExplicitRounding
-
--- TODO
--- Not sound because / gives wrong rounding
--- Better:
---   (x,y) = high/low point
---   midpoint = (x+y) / 2
---   error = max (midpoint - x) (y - midpoint)
--- Maybe still wrong? Is "-" precise? Probably not in general.
-
-
--- TODO: define helper functions with clear rounding behavior:
--- E.g.: plusLow x y = (best) lower bound on x+y
--- (Some of them with additional assumptions if needed, e.g., "y >= 0")
--- absHigh, etc.
-
-
 -- | Gives the radius of the affine form
 radius :: (Num a, ExplicitRounding a) => AF s a -> a
-radius (AF _ xs xe) = v + epsilon v
+radius (AF _ xs xe) = v + eps v
   where v = xe + (sum $ abs <$> xs)
 
 -- | Gives the midpoint of the affine form (the first term of the affine form).
@@ -182,12 +160,12 @@ midpoint (AF x _ _) = x
 
 -- | Gives the minimal possible value of the affine form
 lo :: (Num a, ExplicitRounding a) => AF s a -> a
-lo af = x - epsilon x
+lo af = x - eps x
   where x = (midpoint af) - (radius af)
 
 -- | Gives the maximal possible value of the affine form
 hi :: (Num a, ExplicitRounding a) => AF s a -> a
-hi af = x + epsilon x
+hi af = x + eps x
   where x = (midpoint af) + (radius af)
 
 -- | Gives the corresponding interval of the affine form
@@ -202,7 +180,7 @@ member x af = x `IA.member` (interval af)
 
 -- | Sets the midpoint of the affine form
 setMidpoint :: (Num a, ExplicitRounding a) => a -> AF s a -> AF s a
-setMidpoint m (AF x xs xe) = AF m xs (xe+epsilon m)
+setMidpoint m (AF x xs xe) = AF m xs $ xe + eps m
 
 -- | Adds the value to the error term of the affine form
 addError :: (Num a, Ord a) => AF s a -> a -> AF s a
@@ -212,37 +190,39 @@ addError (AF x xs xe) e
 
 -- | Adds a scalar value to the affine form
 (.+) :: (Num a, ExplicitRounding a) => a -> AF s a -> AF s a
-a .+ (AF x xs xe) = AF m xs (xe+epsilon m)
+a .+ (AF x xs xe) = AF m xs (xe + rnd)
   where m = x + a
+        rnd = eps $ a + xe
 
 add :: (ExplicitRounding a, Num a, Ord a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `add` (AF y ys ye) = addError af (epsilon $ radius af)
-  where zs = (\(l,r) -> l+r) <$> embed xs ys
-        af = AF (x+y) zs (xe + ye)
+(AF x xs xe) `add` (AF y ys ye) = addError af rnd
+  where zs  = (uncurry (+)) <$> embed xs ys
+        af  = AF (x + y) zs (xe +/ ye)
+        rnd = foldl (+/) 0 $ (uncurry (+)) <$> embed (eps <$> xs ++ [x]) (eps <$> ys ++ [y])
 
 negateAF :: (Num a) => AF s a -> AF s a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 
 multiply :: (Num a, Ord a, ExplicitRounding a) => AF s a -> AF s a -> AF s a
-(AF x xs xe) `multiply` (AF y ys ye) = addError af (epsilon $ radius af)
+af1@(AF x xs xe) `multiply` af2@(AF y ys ye) = addError af rnd
   where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
         ze1 = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
-        ze2 = (abs x*ye) + (abs y*xe)
-        af = AF (x*y) zs (ze1+ze2)
+        ze2 = (abs x * ye) + (abs y * xe)
+        af = AF (x * y) zs (ze1 + ze2)
+        -- fig-sto-97:74
+        rnd = eps $ radius af +/ (radius af1 */ radius af2)
 
 -- | Multiplies the affine form by a scalar
 (.*) :: (Eq a, Num a, Ord a, ExplicitRounding a) => a -> AF s a -> AF s a
-a .* (AF x xs xe) = addError af (epsilon $ radius af)
+a .* (AF x xs xe) = addError af rnd
   where af = AF (a*x) ((a*) <$> xs) $ (a * xe)
+        rnd = foldl (+/) 0 (eps . (a */) <$> xs ++ [x, xe])
 
 recipAF :: (Ord a, Fractional a, ExplicitRounding a) => AF s a -> AF s a
-recipAF af =
-  -- Any way to get rid of the if-else statements?
-  if low > 0
-    then minrange recip (\x -> -1/x^2) Convex af
-    else if high < 0
-      then negateAF . recipAF $ negateAF af
-      else throw DivisionByZero
+recipAF af
+  | low > 0   = minrange recip (\x -> -1/x^2) Convex af
+  | high < 0  = negateAF . recipAF $ negateAF af
+  | otherwise = throw DivisionByZero
   where high = hi af
         low  = lo af
 
@@ -285,8 +265,9 @@ signumAF af
 -- | Fixes the epsilons of the affine form to the values in the list
 -- The list will be extended by zeroes to match the length of the list of coefficients
 fix :: (Num a, Ord a, ExplicitRounding a) => AF s a -> [a] -> IA.Interval a
-fix (AF x xs xe) vals = (l - epsilon l)...(h + epsilon h)
+fix (AF x xs xe) vals = (l - eps l)...(h + eps h)
   where em = embed xs vals
+        -- TODO: rounding
         s = sum $ uncurry (*) <$> em
         m = x + s
         l = m - xe
@@ -297,16 +278,17 @@ minrange :: (Fractional a, Ord a, ExplicitRounding a) => (a -> a) -> (a -> a) ->
 -- TODO: inputs should be (a -> a*a), returning lower/upper bound
 -- TODO: think where you have to use upper/lower rounded values
 minrange f f' curv = \af ->
-  let a = hi af
-      b = lo af
-      p = case curv of
-            Convex  -> f' a
-            Concave -> f' b
-      q = ((f a)+(f b)-p*(a+b))/2
-      d = abs ((f a)-(f b)+p*(a-b))/2
-      af1 = q .+ (p .* af) `addError` (d)
+  let a   = hi af
+      b   = lo af
+      p   = case curv of
+              Convex  -> f' a
+              Concave -> f' b
+      q   = ((f a)+(f b)-p*(a+b))/2
+      d   = abs ((f a)-(f b)+p*(a-b))/2
+      rnd = eps $ (eps $ q + a * p) + (eps $ q + b * p)
+      af1 = q .+ (p .* af) `addError` (d + rnd)
   in
-    addError af1 $ epsilon (radius af1)
+    addError af1 rnd
 
 -- TODO: other possibility to define plusHighLow:
 -- plusHighLow x y = evalRoundingMonad do setRoundingUp

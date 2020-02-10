@@ -5,8 +5,11 @@
 module Numeric.AffineForm.Utils (
                                 embed,
                                 pmod', clamp,
-                                epsilon,
-                                ExplicitRounding
+                                eps,
+                                ExplicitRounding,
+                                (+/), (+\),
+                                (-/), (-\),
+                                (*/), (*\)
                                 ) where
 
 import qualified Numeric.Interval as IA
@@ -33,20 +36,39 @@ clamp x a b = min (max a x) b
 -- Rounding
 
 class (Ord a, Num a) => ExplicitRounding a where
-  epsilon :: a -> a
+  eps :: a -> a
   interval :: a -> IA.Interval a
+  prev :: a -> a
+  next :: a -> a
+  (+/) :: a -> a -> a
+  (+\) :: a -> a -> a
+  (-/) :: a -> a -> a
+  (-\) :: a -> a -> a
+  (*/) :: a -> a -> a
+  (*\) :: a -> a -> a
 
   -- Epsilon should be defined so that `interval x` would contain all the values that
   -- could be set equal to x due to rounding errors
-  interval x = (x - epsilon x)IA....(x + epsilon x)
+  prev x     = x - eps x
+  next x     = x + eps x
+  interval x = (prev x)IA....(next x)
+  x +/ y     = next $ x + y
+  x +\ y     = prev $ x + y
+  x -/ y     = next $ x - y
+  x -\ y     = prev $ x - y
+  x */ y     = next $ x * y
+  x *\ y     = prev $ x * y
 
 instance ExplicitRounding Int where
-  epsilon _ = 0
+  eps = const 0
+
+instance (Integral a, ExplicitRounding a) => ExplicitRounding (Ratio a) where
+  eps x = (eps $ numerator x) % (abs (denominator x) - (eps $ denominator x))
 
 instance ExplicitRounding Float where
-  epsilon 0 = epsilon $ 1e-36
-  epsilon x = encodeFloat 1 (snd $ decodeFloat x)
+  eps 0 = eps $ 1e-36
+  eps x = encodeFloat 1 (snd $ decodeFloat x)
 
 instance ExplicitRounding Double where
-  epsilon 0 = epsilon $ 1e-300
-  epsilon x = encodeFloat 1 (snd $ decodeFloat x)
+  eps 0 = eps $ 1e-300
+  eps x = encodeFloat 1 (snd $ decodeFloat x)
