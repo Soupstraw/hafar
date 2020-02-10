@@ -14,6 +14,7 @@ module Numeric.AffineForm (AFM, AF, newEps,
                            lo, hi,
                            interval,
                            member,
+                           epscount_,
                            setMidpoint,
                            fix,
                            addError,
@@ -151,8 +152,8 @@ evalAFM (AFMT x) = fst . runIdentity $ x 0
 
 -- | Gives the radius of the affine form
 radius :: (Num a, ExplicitRounding a) => AF s a -> a
-radius (AF _ xs xe) = v + eps v
-  where v = xe + (sum $ abs <$> xs)
+radius (AF _ xs xe) = v
+  where v = xe +/ (sumup $ abs <$> xs)
 
 -- | Gives the midpoint of the affine form (the first term of the affine form).
 midpoint :: AF s a -> a
@@ -176,6 +177,9 @@ interval af = (lo af)...(hi af)
 member :: (Num a, Ord a, ExplicitRounding a) => a -> AF s a -> Bool
 member x af = x `IA.member` (interval af)
 
+epscount_ :: AF s a -> Int
+epscount_ (AF _ xs _) = length xs
+
 -- Affine arithmetic operations
 
 -- | Sets the midpoint of the affine form
@@ -198,7 +202,7 @@ add :: (ExplicitRounding a, Num a, Ord a) => AF s a -> AF s a -> AF s a
 (AF x xs xe) `add` (AF y ys ye) = addError af rnd
   where zs  = (uncurry (+)) <$> embed xs ys
         af  = AF (x + y) zs (xe +/ ye)
-        rnd = foldl (+/) 0 $ (uncurry (+)) <$> embed (eps <$> xs ++ [x]) (eps <$> ys ++ [y])
+        rnd = sumup $ (uncurry (+/)) <$> embed (eps <$> xs ++ [x]) (eps <$> ys ++ [y])
 
 negateAF :: (Num a) => AF s a -> AF s a
 negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
@@ -206,17 +210,17 @@ negateAF (AF x xs xe) = AF (-x) (negate <$> xs) xe
 multiply :: (Num a, Ord a, ExplicitRounding a) => AF s a -> AF s a -> AF s a
 af1@(AF x xs xe) `multiply` af2@(AF y ys ye) = addError af rnd
   where zs = uncurry (+) <$> embed ((y*) <$> xs) ((x*) <$> ys)
-        ze1 = sum $ liftM2 (*) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
-        ze2 = (abs x * ye) + (abs y * xe)
-        af = AF (x * y) zs (ze1 + ze2)
+        ze1 = sum $ liftM2 (*/) (abs <$> xs ++ [xe]) (abs <$> ys ++ [ye])
+        ze2 = (abs x */ ye) +/ (abs y */ xe)
+        af = AF (x * y) zs (ze1 +/ ze2)
         -- fig-sto-97:74
-        rnd = eps $ radius af +/ (radius af1 */ radius af2)
+        rnd = sumup $ (uncurry (*/)) <$> liftM2 (,) (eps <$> xs ++ [x, xe]) (eps <$> ys ++ [y, ye])
 
 -- | Multiplies the affine form by a scalar
 (.*) :: (Eq a, Num a, Ord a, ExplicitRounding a) => a -> AF s a -> AF s a
 a .* (AF x xs xe) = addError af rnd
   where af = AF (a*x) ((a*) <$> xs) $ (a * xe)
-        rnd = foldl (+/) 0 (eps . (a */) <$> xs ++ [x, xe])
+        rnd = sumup $ eps . (a */) <$> xs ++ [x, xe]
 
 recipAF :: (Ord a, Fractional a, ExplicitRounding a) => AF s a -> AF s a
 recipAF af
@@ -262,12 +266,11 @@ signumAF af
 -- Helper functions
 --
 
--- | Fixes the epsilons of the affine form to the values in the list
--- The list will be extended by zeroes to match the length of the list of coefficients
+-- | Fixes the epsilons of the affine form to the values in the list.
+-- The list will be padded with zeroes to match the number of coefficients.
 fix :: (Num a, Ord a, ExplicitRounding a) => AF s a -> [a] -> IA.Interval a
-fix (AF x xs xe) vals = (l - eps l)...(h + eps h)
+fix (AF x xs xe) vals = (l)...(h)
   where em = embed xs vals
-        -- TODO: rounding
         s = sum $ uncurry (*) <$> em
         m = x + s
         l = m - xe
@@ -275,8 +278,6 @@ fix (AF x xs xe) vals = (l - eps l)...(h + eps h)
 
 -- | Returns a min-range approximation function for given function and its derivative.
 minrange :: (Fractional a, Ord a, ExplicitRounding a) => (a -> a) -> (a -> a) -> Curvature -> (AF s a -> AF s a)
--- TODO: inputs should be (a -> a*a), returning lower/upper bound
--- TODO: think where you have to use upper/lower rounded values
 minrange f f' curv = \af ->
   let a   = hi af
       b   = lo af
@@ -285,14 +286,7 @@ minrange f f' curv = \af ->
               Concave -> f' b
       q   = ((f a)+(f b)-p*(a+b))/2
       d   = abs ((f a)-(f b)+p*(a-b))/2
-      rnd = eps $ (eps $ q + a * p) + (eps $ q + b * p)
+      rnd = eps $ (eps $ q +/ a */ p) + (eps $ q +/ b */ p)
       af1 = q .+ (p .* af) `addError` (d + rnd)
   in
     addError af1 rnd
-
--- TODO: other possibility to define plusHighLow:
--- plusHighLow x y = evalRoundingMonad do setRoundingUp
---                                        let r1 = x + y
---                                        setRoundingDown
---                                        let r2 = x + y
---                                        return (r1,r2)

@@ -89,11 +89,21 @@ correctnessPropUnary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
   AF s a ->
   Property
 correctnessPropUnary f g e x = withMaxSuccess 5000 $ counterexample str res
-  where lhs = (f x) `fix` e
+  where af = f x
         rhs = g (IA.midpoint $ fix x e)
-        res = rhs `IA.member` lhs
-        str = "AA: " ++ (show lhs) ++ "\n"
-           ++ "IA: " ++ (show rhs)
+        rhs_lo = g (IA.inf $ fix x e)
+        rhs_hi = g (IA.sup $ fix x e)
+        res = rhs `IA.member` interval af .&&.
+              rhs_lo `IA.member` interval af .&&.
+              rhs_hi `IA.member` interval af
+        str = "-- RESULTS --\n"
+           ++ "- LHS -\n"
+           ++ "AF: " ++ (show af) ++ "\n"
+           ++ "INTERVAL: " ++ (show $ interval af) ++ "\n"
+           ++ "- RHS -\n"
+           ++ "MID: " ++ (show rhs) ++ "\n"
+           ++ "HI: " ++ (show rhs_hi) ++ "\n"
+           ++ "LO: " ++ (show rhs_lo) ++ "\n"
 
 correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
   (AF s a -> AF s a -> AF s a) ->
@@ -103,11 +113,22 @@ correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
   AF s a ->
   Property
 correctnessPropBinary f g e x y = withMaxSuccess 5000 $ counterexample str res
-  where lhs = (f x y) `fix` e
+  where af = f x y
         rhs = g (IA.midpoint $ fix x e) (IA.midpoint $ fix y e)
-        res = rhs `IA.member` lhs
-        str = "AA: " ++ (show lhs) ++ "\n"
-           ++ "IA: " ++ (show rhs)
+        rhs_lo = g (IA.inf $ fix x e) (IA.inf $ fix y e)
+        rhs_hi = g (IA.sup $ fix x e) (IA.sup $ fix y e)
+
+        res = rhs `IA.member` interval af .&&.
+              rhs_lo `IA.member` interval af .&&.
+              rhs_hi `IA.member` interval af
+        str = "-- RESULTS --\n"
+           ++ "- LHS -\n"
+           ++ "AF: " ++ (show af) ++ "\n"
+           ++ "INTERVAL: " ++ (show $ interval af) ++ "\n"
+           ++ "- RHS -\n"
+           ++ "MID: " ++ (show rhs) ++ "\n"
+           ++ "HI: " ++ (show rhs_hi) ++ "\n"
+           ++ "LO: " ++ (show rhs_lo) ++ "\n"
 
 -- RuKaS14.pdf [1102:2]
 -- prop_addition :: EpsV Double -> AF Double -> AF Double -> Property

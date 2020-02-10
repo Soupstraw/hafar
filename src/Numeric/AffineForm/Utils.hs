@@ -3,7 +3,7 @@
 {-# LANGUAGE DataKinds #-}
 
 module Numeric.AffineForm.Utils (
-                                embed,
+                                embed, sumup,
                                 pmod', clamp,
                                 eps,
                                 ExplicitRounding,
@@ -32,6 +32,9 @@ pmod' a b
 
 clamp :: (Ord a) => a -> a -> a -> a
 clamp x a b = min (max a x) b
+
+sumup :: (ExplicitRounding a) => [a] -> a
+sumup = foldl (+/) 0
 
 -- Rounding
 
