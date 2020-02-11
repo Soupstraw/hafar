@@ -82,12 +82,12 @@ validEV (EpsV l) = all (\x -> -1 <= x && x <= 1) l
 
 -- Generalized
 
-correctnessPropUnary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
-  (AF s a -> AF s a) ->
-  (a -> a) ->
-  [a] ->
-  AF s a ->
-  Property
+correctnessPropUnary :: (Fractional a, Ord a, Show a, ExplicitRounding a)
+  => (AF s a -> AF s a)
+  -> (a -> a)
+  -> [a]
+  -> AF s a
+  -> Property
 correctnessPropUnary f g e x = withMaxSuccess 5000 $ counterexample str res
   where af = f x
         rhs = g (IA.midpoint $ fix x e)
@@ -105,13 +105,13 @@ correctnessPropUnary f g e x = withMaxSuccess 5000 $ counterexample str res
            ++ "HI: " ++ (show rhs_hi) ++ "\n"
            ++ "LO: " ++ (show rhs_lo) ++ "\n"
 
-correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a) =>
-  (AF s a -> AF s a -> AF s a) ->
-  (a -> a -> a) ->
-  [a] ->
-  AF s a ->
-  AF s a ->
-  Property
+correctnessPropBinary :: (Fractional a, Ord a, Show a, ExplicitRounding a)
+  => (AF s a -> AF s a -> AF s a)
+  -> (a -> a -> a)
+  -> [a]
+  -> AF s a
+  -> AF s a
+  -> Property
 correctnessPropBinary f g e x y = withMaxSuccess 5000 $ counterexample str res
   where af = f x y
         rhs = g (IA.midpoint $ fix x e) (IA.midpoint $ fix y e)

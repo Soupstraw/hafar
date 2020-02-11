@@ -28,7 +28,6 @@ import Control.Exception (Exception, throw, evaluate, try)
 import Numeric.AffineForm.Utils
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
-import Numeric.Rounded
 import Data.Fixed (mod')
 import Data.Ratio (approxRational, (%))
 import Data.Either (fromLeft, fromRight)

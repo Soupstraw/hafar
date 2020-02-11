@@ -34,10 +34,7 @@ packages:
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
 #
-extra-deps: 
-- rounded-1.0@sha256:763d37d9a6d70811896ef4590e6a86cf10dfed2907a02ae6e28c88ed5c988d44,3295
-- hgmp-0.1.1@sha256:d22f8a263d5b8e813a2e9a616f648d491de96d8f227130316d269c21843b2f03,2339
-- long-double-0.1@sha256:af062ec9f60be3de9d0164d5aa602cd4515fbfc0fcead12a15338515991fa80f,1964
+#extra-deps:
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

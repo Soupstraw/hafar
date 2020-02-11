@@ -13,7 +13,6 @@ module Numeric.AffineForm.Utils (
                                 ) where
 
 import qualified Numeric.Interval as IA
-import Numeric.Rounded
 import Data.Ratio
 import Data.Fixed
 import Data.Proxy
@@ -69,9 +68,9 @@ instance (Integral a, ExplicitRounding a) => ExplicitRounding (Ratio a) where
   eps x = (eps $ numerator x) % (abs (denominator x) - (eps $ denominator x))
 
 instance ExplicitRounding Float where
-  eps 0 = eps $ 1e-36
-  eps x = encodeFloat 1 (snd $ decodeFloat x)
+  eps 0 = eps $ 2e-36
+  eps x = encodeFloat 2 (snd $ decodeFloat x)
 
 instance ExplicitRounding Double where
   eps 0 = eps $ 1e-300
-  eps x = encodeFloat 1 (snd $ decodeFloat x)
+  eps x = encodeFloat 2 (snd $ decodeFloat x)
