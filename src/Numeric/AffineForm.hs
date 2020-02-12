@@ -5,6 +5,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds, ScopedTypeVariables #-}
 
+-- | This module defines the affine form, the AFM monad
+-- and many operations for affine forms.
 module Numeric.AffineForm (AFM, AF, newEps,
                            newFromInterval,
                            singleton,
@@ -177,6 +179,7 @@ interval af = (inf af)...(sup af)
 member :: (Num a, Ord a, ExplicitRounding a) => a -> AF s a -> Bool
 member x af = x `IA.member` (interval af)
 
+-- | Returns the number of noise symbols in the affine form.
 epscount_ :: AF s a -> Int
 epscount_ (AF _ xs _) = length xs
 

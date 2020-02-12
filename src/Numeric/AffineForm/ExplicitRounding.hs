@@ -1,3 +1,5 @@
+-- | ExplicitRounding defines the ExplicitRounding class and
+-- instances for some more common numeric types
 module Numeric.AffineForm.ExplicitRounding (
                                 ExplicitRounding,
                                 eps, prev, next,
@@ -9,6 +11,7 @@ module Numeric.AffineForm.ExplicitRounding (
 import Numeric.Interval as IA
 import Data.Ratio
 
+-- | The class of numeric values that can be rounded explicitly
 class (Ord a, Num a) => ExplicitRounding a where
   -- | Return some number so that all the values that could be rounded to the parameter of this function
   -- would be at most that distance away from that parameter.
@@ -30,8 +33,6 @@ class (Ord a, Num a) => ExplicitRounding a where
   -- | Multiply the two values, rounding the result down
   (*\) :: a -> a -> a
 
-  -- Epsilon should be defined so that `interval x` would contain all the values that
-  -- could be equal to x due to rounding errors
   prev x     = x - eps x
   next x     = x + eps x
   x +/ y     = next $ x + y

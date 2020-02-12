@@ -2,16 +2,13 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE DataKinds #-}
 
+-- | Provides some useful functions
 module Numeric.AffineForm.Utils (
                                 embed, sumup,
                                 pmod', clamp,
                                 ) where
 
-import qualified Numeric.Interval as IA
-import Data.Ratio
 import Data.Fixed
-import Data.Proxy
-import GHC.Float hiding (clamp)
 import Numeric.AffineForm.ExplicitRounding
 
 -- | Zips the two lists together, padding the shorter list with zeroes
