@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ee54126782dc2854f04befc4550776d258e3ed032ea6ffbe4e349166d5a1d08d
+-- hash: 1cf647148c4013df69326669a67c8e993fc1abad65f74b4047f54e8f0288402a
 
 name:           hafar
 version:        0.1.0.0
@@ -30,6 +30,7 @@ source-repository head
 library
   exposed-modules:
       Numeric.AffineForm
+      Numeric.AffineForm.ExplicitRounding
       Numeric.AffineForm.Utils
   other-modules:
       Paths_hafar

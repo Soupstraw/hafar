@@ -11,6 +11,7 @@ import Data.Fixed (mod')
 import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate, Interval, midpoint)
 import Numeric.AffineForm
 import Numeric.AffineForm.Utils
+import Numeric.AffineForm.ExplicitRounding
 
 --
 -- Generators and modifiers

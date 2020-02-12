@@ -26,6 +26,7 @@ import Control.Monad.Identity hiding (fix)
 import Control.Exception (Exception, throw, evaluate, try)
 
 import Numeric.AffineForm.Utils
+import Numeric.AffineForm.ExplicitRounding
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
 import Data.Fixed (mod')
