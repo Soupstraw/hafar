@@ -1,4 +1,4 @@
-# hafar
+# Hafar
 
 Hafar is an implementation of affine arithmetic in haskell.
 
