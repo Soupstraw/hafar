@@ -21,11 +21,11 @@ description:    Hafar is an affine arithmetic library for Haskell.
                 It is an efficient way to work with ranges of values or imprecise values.
 
 dependencies:
-- base >= 4.7 && < 5
-- intervals >= 0.8 && < 1
-- QuickCheck >= 2.13 && < 3
-- random >= 1.1 && < 2
-- mtl >= 2.2 && < 3
+- base >= 4.12 && < 4.13
+- intervals >= 0.8 && < 0.9
+- QuickCheck >= 2.13 && < 2.14
+- random >= 1.1 && < 1.2
+- mtl >= 2.2 && < 2.3
 
 library:
   source-dirs: src
