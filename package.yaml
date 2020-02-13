@@ -1,7 +1,7 @@
 name:                hafar
 version:             0.1.0.0
 github:              "Soupstraw/hafar"
-license:             GPL
+license:             BSD3
 author:              "Joosep Jääger"
 maintainer:          "Joosep Jääger"
 copyright:           "2019 Joosep Jääger"
@@ -21,7 +21,7 @@ description:    Hafar is an affine arithmetic library for Haskell.
                 It is an efficient way to work with ranges of values or imprecise values.
 
 dependencies:
-- base >= 4.12 && <= 4.13
+- base >= 4.12 && < 4.14
 - intervals >= 0.8 && < 0.9
 - mtl >= 2.2 && < 2.3
 - QuickCheck >= 2.13 && < 2.14

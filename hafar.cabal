@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 5ab4ff5ec6184655e4bd051e61da456409ab2143e590a008dc7ab9641cf19353
+-- hash: eff5e2c38791a48f5b29871b816c02eccfc4eaf57d0d9c84010f5ef3f8313224
 
 name:           hafar
 version:        0.1.0.0
@@ -16,7 +16,7 @@ bug-reports:    https://github.com/Soupstraw/hafar/issues
 author:         Joosep Jääger
 maintainer:     Joosep Jääger
 copyright:      2019 Joosep Jääger
-license:        GPL
+license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -53,7 +53,7 @@ test-suite hafar-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck >=2.13 && <2.14
-    , base >=4.12 && <=4.13
+    , base >=4.12 && <4.14
     , hafar
     , intervals >=0.8 && <0.9
     , mtl >=2.2 && <2.3
