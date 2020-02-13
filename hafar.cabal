@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 09b3cfddccdb4e41887aa45ec9e40d6d5babe281aec43edd624bb24b97b51231
+-- hash: 4f34887a9fe7542a70e71660864c9529660be268a172db9ec35fbbbb2d22e48c
 
 name:           hafar
-version:        0.1.0.0
+version:        0.1.1.0
 synopsis:       Affine arithmetic library for Haskell
 description:    Hafar is an affine arithmetic library for Haskell. It is an efficient way to work with ranges of values or imprecise values.
 category:       Numeric
