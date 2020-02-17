@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: eff5e2c38791a48f5b29871b816c02eccfc4eaf57d0d9c84010f5ef3f8313224
+-- hash: ee060b50ece59b05e0ea01868f8d3af16765e4f16983251e0d784d0670bcb0dd
 
 name:           hafar
 version:        0.1.0.0
@@ -31,14 +31,14 @@ library
   exposed-modules:
       Numeric.AffineForm
       Numeric.AffineForm.ExplicitRounding
-      Numeric.AffineForm.Utils
   other-modules:
+      Numeric.AffineForm.Internal
+      Numeric.AffineForm.Utils
       Paths_hafar
   hs-source-dirs:
       src
   build-depends:
-      QuickCheck >=2.13 && <2.14
-    , base >=4.12 && <4.14
+      base >=4.12 && <4.14
     , intervals >=0.8 && <0.9
     , mtl >=2.2 && <2.3
   default-language: Haskell2010
@@ -57,5 +57,4 @@ test-suite hafar-test
     , hafar
     , intervals >=0.8 && <0.9
     , mtl >=2.2 && <2.3
-    , random >=1.1 && <1.2
   default-language: Haskell2010

@@ -24,10 +24,12 @@ dependencies:
 - base >= 4.12 && < 4.14
 - intervals >= 0.8 && < 0.9
 - mtl >= 2.2 && < 2.3
-- QuickCheck >= 2.13 && < 2.14
 
 library:
-  source-dirs: src
+  source-dirs:     src
+  exposed-modules:
+  - Numeric.AffineForm
+  - Numeric.AffineForm.ExplicitRounding
 
 tests:
   hafar-test:
@@ -39,4 +41,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - hafar
-    - random >= 1.1 && < 1.2
+    - QuickCheck >= 2.13 && < 2.14

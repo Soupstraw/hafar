@@ -4,12 +4,11 @@
 import Test.QuickCheck
 
 import Control.Monad
-import System.Random
 import Text.Printf
 import Data.Fixed (mod')
 
 import qualified Numeric.Interval as IA (member, inf, sup, contains, inflate, Interval, midpoint)
-import Numeric.AffineForm
+import Numeric.AffineForm.Internal
 import Numeric.AffineForm.Utils
 import Numeric.AffineForm.ExplicitRounding
 
@@ -26,6 +25,15 @@ instance (Real a, Arbitrary a) => Arbitrary (EpsV a) where
     let ls = (\x -> (x `mod'` 2) -1) <$> l
     return $ EpsV ls
   shrink (EpsV l) = filter validEV $ EpsV <$> (shrink l)
+
+instance (Num a, Ord a, Arbitrary a) => Arbitrary (AF s a) where
+  arbitrary = do
+                x <- arbitrary
+                xs <- arbitrary
+                (Positive xe) <- arbitrary
+                return $ AF x xs xe
+  shrink (AF x xs xe) =
+    [AF x' xs' xe' | (x', xs', xe') <- shrink (x, xs, xe)]
 
 newtype SmallExponent a = SmallExponent a
   deriving (Show)
