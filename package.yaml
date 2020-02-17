@@ -30,11 +30,21 @@ library:
   exposed-modules:
   - Numeric.AffineForm
   - Numeric.AffineForm.ExplicitRounding
+  other-modules:
+  - Numeric.AffineForm.Utils
+  - Numeric.AffineForm.Internal
 
 tests:
   hafar-test:
     main:                Spec.hs
-    source-dirs:         test
+    source-dirs:
+    - test
+    - src
+    other-modules:
+    - Numeric.AffineForm
+    - Numeric.AffineForm.Internal
+    - Numeric.AffineForm.Utils
+    - Numeric.AffineForm.ExplicitRounding
     ghc-options:
     - -threaded
     - -rtsopts
