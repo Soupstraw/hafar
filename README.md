@@ -4,7 +4,15 @@ Hafar is an implementation of affine arithmetic in haskell.
 
 ## Building
 
-To build the library, simply run `stack build`.
+To build the library, simply run 
+```
+# stack build
+```
+or if using cabal 
+```
+# cabal install --only-dependencies
+# cabal build
+```
 
 ## Example
 
