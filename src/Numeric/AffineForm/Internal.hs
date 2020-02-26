@@ -73,28 +73,27 @@ type AFIndex = Int
 
 -- | AFM is a state monad that ensures that any new noise symbols have not been used by any previous affine form.
 -- All affine arithmetic calculations should be done inside the AFM monad. Affine forms do not make sense outside of their monad context.
-newtype AFMT t s m a = AFMT {runAFMT :: s -> m (a, s)}
-type AFM t a = AFMT t AFIndex Identity a
+newtype AFMT t m a = AFMT {runAFMT :: AFIndex -> m (a, AFIndex)}
+type AFM t a = AFMT t Identity a
 
-instance (Monad m) => Functor (AFMT t s m) where
+instance (Monad m) => Functor (AFMT t m) where
   fmap = liftM
 
-instance (Monad m) => Applicative (AFMT t s m) where
+instance (Monad m) => Applicative (AFMT t m) where
   pure = return
   (<*>) = ap
 
-instance (Monad m) => Monad (AFMT t s m) where
+instance (Monad m) => Monad (AFMT t m) where
   return a = AFMT $ \s -> return (a, s)
   (AFMT x) >>= f = AFMT $ \s -> do
     (v, s') <- x s
     (AFMT x') <- return $ f v
     x' s'
 
-instance (Monad m) => MonadState s (AFMT t s m) where
-  get   = AFMT $ \s -> return (s, s)
-  put s = AFMT $ \_ -> return ((), s)
+getIndex   = AFMT $ \s -> return (s, s)
+putIndex s = AFMT $ \_ -> return ((), s)
 
-instance MonadTrans (AFMT t s) where
+instance MonadTrans (AFMT t) where
   lift c = AFMT $ \s -> c >>= (\x -> return (x, s))
 
 -- | This gives an affine form with midpoint 0 and radius 1.
@@ -102,8 +101,8 @@ instance MonadTrans (AFMT t s) where
 -- It can be used to instantiate new affine forms.
 newEps :: Num a => AFM t (AF t a)
 newEps = do
-  idx <- get
-  put $ idx + 1
+  idx <- getIndex
+  putIndex $ idx + 1
   return $ AF 0 (replicate idx 0 ++ [1]) 0
 
 -- | Creates a new affine form that covers the interval.
