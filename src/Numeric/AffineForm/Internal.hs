@@ -15,6 +15,7 @@ import Control.Exception (Exception, throw, evaluate, try)
 
 import Numeric.AffineForm.Utils
 import Numeric.AffineForm.ExplicitRounding
+import Numeric.AffineForm.Subdivision
 import qualified Numeric.Interval as IA
 import Numeric.Interval ((...))
 import Data.Fixed (mod')
@@ -68,6 +69,10 @@ instance (Floating a, RealFrac a, ExplicitRounding a, Ord a) => Floating (AF s a
   asinh = minrange asinh (\x -> 1/sqrt (x^2+1)) undefined
   acosh = minrange acosh (\x -> 1/((sqrt (x-1))*(sqrt (x+1)))) Concave
   atanh = minrange atanh (\x -> 1/(1-x^2)) undefined
+
+instance (Ord a, Fractional a, ExplicitRounding a) => Subdivisible (AF s a) where
+  subdivide af n = mapToInterval af <$> subdivide (interval af) n
+  combine2 l r   = fromInterval $ combine2 (interval l) (interval r)
 
 type AFIndex = Int
 
@@ -157,6 +162,10 @@ member x af = x `IA.member` (interval af)
 epscount_ :: AF s a -> Int
 epscount_ (AF _ xs _) = length xs
 
+-- | Returns the value of the error term
+afError :: AF s a -> a
+afError (AF _ _ e) = e
+
 -- Affine arithmetic operations
 
 -- | Sets the midpoint of the affine form
@@ -168,6 +177,15 @@ addError :: (Num a, Ord a) => AF s a -> a -> AF s a
 addError (AF x xs xe) e
   | e >= 0 = AF x xs (xe + e)
   | otherwise = throw AddingNegativeError
+
+mapToInterval :: (Fractional a, ExplicitRounding a) => AF s a -> IA.Interval a -> AF s a
+mapToInterval af i = m .+ ((wi/waf) .* af)
+  where waf = radius af
+        wi  = IA.width i
+        m   = IA.midpoint i
+
+fromInterval :: (Fractional a) => IA.Interval a -> AF s a
+fromInterval i = AF (IA.midpoint i) [] ((IA.width i)/2)
 
 -- | Adds a scalar value to the affine form
 (.+) :: (Num a, ExplicitRounding a) => a -> AF s a -> AF s a
@@ -267,3 +285,7 @@ minrange f f' curv = \af ->
       af1 = q .+ (p .* af) `addError` (d + rnd)
   in
     addError af1 rnd
+
+--
+-- Subdivision
+--

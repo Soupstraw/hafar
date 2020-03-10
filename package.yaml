@@ -24,6 +24,7 @@ dependencies:
 - base >= 4.12 && < 4.14
 - intervals >= 0.8 && < 0.9
 - mtl >= 2.2 && < 2.3
+- lens >= 4.17 && < 4.18
 
 library:
   source-dirs:     src
@@ -33,6 +34,7 @@ library:
   other-modules:
   - Numeric.AffineForm.Utils
   - Numeric.AffineForm.Internal
+  - Numeric.AffineForm.Subdivision
 
 tests:
   hafar-test:

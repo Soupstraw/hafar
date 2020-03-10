@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 11f7d969e8f00b5e392eda2b0897debe20363e72178cbd6a8a87a7ab29e2b819
+-- hash: 2af8b110082773487decd1af3adae8ac2954672a4f1848081f00535386f6be58
 
 name:           hafar
 version:        0.1.0.0
@@ -34,11 +34,13 @@ library
   other-modules:
       Numeric.AffineForm.Utils
       Numeric.AffineForm.Internal
+      Numeric.AffineForm.Subdivision
   hs-source-dirs:
       src
   build-depends:
       base >=4.12 && <4.14
     , intervals >=0.8 && <0.9
+    , lens >=4.17 && <4.18
     , mtl >=2.2 && <2.3
   default-language: Haskell2010
 
@@ -59,5 +61,6 @@ test-suite hafar-test
     , base >=4.12 && <4.14
     , hafar
     , intervals >=0.8 && <0.9
+    , lens >=4.17 && <4.18
     , mtl >=2.2 && <2.3
   default-language: Haskell2010
