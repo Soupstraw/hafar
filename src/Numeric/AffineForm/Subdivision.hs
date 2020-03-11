@@ -43,11 +43,11 @@ data SubdivisionEnvironment a b e = SubdivisionEnvironment
   , _subdivs  :: Int
   }
 makeLenses ''SubdivisionEnvironment
-defaultEnvironment :: (Num e) => SubdivisionEnvironment a b e
-defaultEnvironment = SubdivisionEnvironment
-  { _function = undefined
-  , _errorFun = undefined
-  , _maxError = 0
+defaultEnvironment :: (Fractional e) => (a -> b) -> (b -> e) -> SubdivisionEnvironment a b e
+defaultEnvironment f g = SubdivisionEnvironment
+  { _function = f
+  , _errorFun = g
+  , _maxError = 0.1
   , _maxDepth = 3
   , _subdivs  = 2
   }
