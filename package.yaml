@@ -21,7 +21,7 @@ description:    Hafar is an affine arithmetic library for Haskell.
                 It is an efficient way to work with ranges of values or imprecise values.
 
 dependencies:
-- base >= 4.12 && < 4.14
+- base >= 4.12 && < 4.13
 - intervals >= 0.8 && < 0.9
 - mtl >= 2.2 && < 2.3
 - lens >= 4.17 && < 4.18
@@ -31,10 +31,10 @@ library:
   exposed-modules:
   - Numeric.AffineForm
   - Numeric.AffineForm.ExplicitRounding
+  - Numeric.AffineForm.Subdivision
   other-modules:
   - Numeric.AffineForm.Utils
   - Numeric.AffineForm.Internal
-  - Numeric.AffineForm.Subdivision
 
 tests:
   hafar-test:

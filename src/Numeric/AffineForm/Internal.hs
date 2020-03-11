@@ -123,7 +123,7 @@ singleton :: (Num a) => a -> AF s a
 singleton x = AF x [] 0
 
 -- | Creates a new affine form that approximately represents some value.
--- This function adds a small error to account for the 'wobble' in the computer representation of the value.
+-- This function adds a small error to account for the `wobble` in the computer representation of the value.
 approxSingleton :: (ExplicitRounding a) => a -> AF s a
 approxSingleton x = AF x [] $ eps x
 
@@ -285,7 +285,3 @@ minrange f f' curv = \af ->
       af1 = q .+ (p .* af) `addError` (d + rnd)
   in
     addError af1 rnd
-
---
--- Subdivision
---
