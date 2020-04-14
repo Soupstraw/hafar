@@ -128,7 +128,7 @@ approxSingleton :: (ExplicitRounding a) => a -> AF s a
 approxSingleton x = AF x [] $ eps x
 
 -- | Evaluates the AFM monad. It is not possible to get an AF out of an AFM monad.
-evalAFM :: forall a b. (forall t. AFM t b) -> b
+evalAFM :: (forall t. AFM t b) -> b
 evalAFM (AFMT x) = fst . runIdentity $ x 0
 
 -- | Gives the radius of the affine form
